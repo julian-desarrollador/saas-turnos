@@ -1,0 +1,12 @@
+# Normaliza los finales de línea al versionar. Sin esto, cada persona que trabaje
+# en otro sistema operativo produce diffs de archivos completos por el salto de
+# línea, y el formateo automático entra en conflicto consigo mismo.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.webp binary
+*.ico binary
+
+# Generado por pnpm: se versiona, pero no aporta nada leerlo en una revisión.
+pnpm-lock.yaml linguist-generated=true -diff

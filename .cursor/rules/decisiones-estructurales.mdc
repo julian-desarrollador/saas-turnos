@@ -1,0 +1,43 @@
+---
+description: La prueba de los 200 tenants — obligatoria antes de crear carpetas o agregar dependencias
+alwaysApply: true
+---
+
+# La prueba de los 200 tenants
+
+Antes de crear una estructura de carpetas o de agregar una dependencia, respondé:
+
+> ¿Esta decisión sigue teniendo sentido cuando el SaaS tenga 200 tenants y varios desarrolladores trabajando en paralelo?
+
+## Qué hacer con la respuesta
+
+- **No** → no lo implementes. Proponé una alternativa y esperá la decisión.
+- **Sí, pero no es obvio** → implementalo y registrá el motivo en el documento que corresponda, o en un ADR si es costoso de revertir.
+- **Sí y es evidente** → adelante.
+
+## Orden de preferencia
+
+Capacidad nativa de Next.js, React o TypeScript › librería › servicio externo.
+
+No se agrega una herramienta por ser popular. Cada dependencia necesita una justificación técnica escrita.
+
+## Cómo se ve en la práctica
+
+```
+❌ "Agrego una librería de estado global porque siempre la uso."
+✅ "Con Server Components la mayor parte del estado es del servidor. Propongo no
+   agregarla hasta tener un caso concreto que no se resuelva con URL o formulario."
+
+❌ Crear src/utils/ y src/helpers/ en paralelo.
+✅ Un solo lugar para código compartido: con varios desarrolladores, dos carpetas
+   con el mismo propósito se llenan de duplicados.
+
+❌ Agregar Redis para caché en el bootstrap.
+✅ Entra cuando haya una medición que lo justifique (docs/03-architecture.md §11).
+```
+
+## Anclaje
+
+El texto autoritativo vive en `docs/14-coding-standards.md` §1. La documentación en `/docs` es la fuente de verdad del proyecto: si el código y la documentación difieren, manda la documentación y se corrige en el mismo pull request.
+
+Prioridad del proyecto: arquitectura limpia, simplicidad y mantenibilidad por encima de la velocidad de desarrollo.

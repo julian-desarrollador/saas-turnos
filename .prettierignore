@@ -1,0 +1,10 @@
+pnpm-lock.yaml
+next-env.d.ts
+.next/
+node_modules/
+
+# La documentación es la fuente de verdad del proyecto y está escrita a mano.
+# Reformatearla automáticamente solo produce diffs ruidosos sobre texto que ya
+# está cuidado, así que Prettier se ocupa del código y no de la prosa.
+**/*.md
+excalidraw/

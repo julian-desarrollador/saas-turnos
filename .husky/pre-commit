@@ -1,0 +1,4 @@
+# Solo las verificaciones que se pueden hacer archivo por archivo, para que el
+# commit siga siendo rápido. La verificación completa del proyecto (tipos, lint
+# y formato) es responsabilidad de CI: docs/12-deployment.md §4.
+pnpm exec lint-staged

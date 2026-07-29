@@ -1,0 +1,7 @@
+# Lista blanca de dependencias autorizadas a ejecutar scripts de instalación.
+# Lo que no esté declarado acá queda bloqueado por defecto (docs/13-security.md §13).
+# sharp: binario nativo de optimización de imágenes que usa Next.js.
+# unrs-resolver: resolvedor nativo que usa el plugin de imports de ESLint.
+allowBuilds:
+  sharp: true
+  unrs-resolver: true

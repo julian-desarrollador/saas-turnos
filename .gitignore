@@ -1,0 +1,32 @@
+# dependencias
+/node_modules
+
+# build de Next.js
+/.next/
+/out/
+/build
+
+# testing
+/coverage
+
+# Variables de entorno: no se versiona ningún .env.
+# La única excepción es la plantilla, que sí debe estar en el repositorio.
+.env*
+!.env.example
+
+
+*.md
+# vercel
+.vercel
+
+# typescript
+*.tsbuildinfo
+next-env.d.ts
+
+# sistema operativo y editores
+.DS_Store
+Thumbs.db
+*.pem
+
+# logs
+*-debug.log*
