@@ -5,7 +5,6 @@ import type { Route } from "next";
 import Link from "next/link";
 import { useMemo, useState } from "react";
 
-import { cn } from "@/lib/utils";
 import { clientDisplayName } from "@/modules/clients/adapters/inbound/messages";
 import type {
   ClientAppointmentRecord,
@@ -40,15 +39,11 @@ function visitStatusLabel(status: ClientAppointmentStatus): string {
 }
 
 function formatVisitDate(localDate: string): string {
-  const year = Number(localDate.slice(0, 4));
-  const month = Number(localDate.slice(5, 7));
-  const day = Number(localDate.slice(8, 10));
-  return new Intl.DateTimeFormat("es-AR", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    timeZone: "UTC",
-  }).format(new Date(Date.UTC(year, month - 1, day, 12)));
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(localDate);
+  if (!match) {
+    return localDate;
+  }
+  return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
 export function ClientFichaClient({
@@ -67,8 +62,13 @@ export function ClientFichaClient({
   canWrite: boolean;
 }) {
   const name = clientDisplayName(client);
+  const initial = (name.trim().charAt(0) || "?").toUpperCase();
   const waUrl = whatsAppChatUrl(client.phone);
   const visitCount = appointments.length;
+  const visitsLabel =
+    visitCount === 0
+      ? "Sin visitas"
+      : `${visitCount}${hasMoreAppointments ? "+" : ""} ${visitCount === 1 ? "visita" : "visitas"}`;
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState("");
@@ -108,161 +108,173 @@ export function ClientFichaClient({
   }
 
   return (
-    <main className="mx-auto max-w-md px-4 py-6 pb-[calc(6rem+env(safe-area-inset-bottom))]">
-      <header className="mb-5 flex items-start gap-3">
-        <Link
-          href={`/${slug}/clients` as Route}
-          aria-label="Volver a clientes"
-          className="border-border bg-card hover:bg-muted flex size-10 shrink-0 items-center justify-center rounded-2xl border"
-        >
-          <ChevronLeft className="size-5" strokeWidth={2} />
-        </Link>
-        <div className="min-w-0 flex-1">
-          <p className="text-muted-foreground text-[12px] font-medium tracking-[0.12em] uppercase">
-            Ficha del cliente
-          </p>
-          <h1 className="mt-0.5 text-[22px] leading-tight font-bold">{name}</h1>
-          <p className="text-muted-foreground mt-1 text-sm">{client.phone}</p>
-          <p className="text-muted-foreground/80 mt-1 text-[13px]">
-            {visitCount === 0
-              ? "Sin visitas registradas"
-              : `${visitCount}${hasMoreAppointments ? "+" : ""} ${visitCount === 1 ? "visita" : "visitas"} registradas`}
-          </p>
-        </div>
-      </header>
+    <div className="bg-muted/50 min-h-[calc(100dvh-8rem)]">
+      <main className="mx-auto max-w-md px-4 pt-6 pb-[calc(6rem+env(safe-area-inset-bottom))]">
+        <header className="mb-6">
+          <div className="mb-4 flex items-center gap-2.5">
+            <Link
+              href={`/${slug}/clients` as Route}
+              aria-label="Volver a clientes"
+              className="border-border bg-card hover:bg-background flex size-10 shrink-0 items-center justify-center rounded-2xl border shadow-sm"
+            >
+              <ChevronLeft className="size-5" strokeWidth={2} />
+            </Link>
+            <p className="text-muted-foreground text-[12px] font-medium tracking-[0.12em] uppercase">
+              Ficha del cliente
+            </p>
+          </div>
 
-      {waUrl ? (
-        <a
-          href={waUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="mb-4 inline-flex items-center gap-2 text-[14px] font-semibold text-[#128C7E] underline-offset-2 hover:underline"
-        >
-          <WhatsAppIcon className="size-4" />
-          Enviar WhatsApp
-        </a>
-      ) : null}
-
-      {client.notes ? (
-        <div className="border-border bg-card mb-4 rounded-[24px] border px-4 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
-          <p className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
-            Notas del cliente
-          </p>
-          <p className="mt-1 text-sm leading-relaxed whitespace-pre-wrap">{client.notes}</p>
-        </div>
-      ) : null}
-
-      <section className="space-y-4 pb-8">
-        <p className="text-muted-foreground text-[13px] font-semibold tracking-wide uppercase">
-          Historial de visitas
-        </p>
-
-        {visits.length === 0 ? (
-          <p className="text-muted-foreground py-6 text-center text-[15px]">
-            Todavía no tiene turnos en este negocio.
-          </p>
-        ) : (
-          visits.map((visit) => {
-            const isEditing = editingId === visit.id;
-            return (
-              <article
-                key={visit.id}
-                className="border-border bg-card overflow-hidden rounded-[24px] border p-4 shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
+          <div className="border-border bg-card rounded-[24px] border p-4 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+            <div className="flex items-center gap-3.5">
+              <span
+                aria-hidden
+                className="bg-muted text-foreground flex size-14 shrink-0 items-center justify-center rounded-2xl text-xl font-bold tracking-tight"
               >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[16px] font-semibold">{visit.serviceName}</p>
-                    <p className="text-muted-foreground mt-1 text-sm">
-                      {formatVisitDate(visit.localDate)} · {visit.localTime} hs
-                    </p>
-                    <p className="text-muted-foreground/80 mt-1 text-xs">
-                      {visit.professionalName} · {visitStatusLabel(visit.status)}
-                    </p>
-                  </div>
-                  {canWrite && !isEditing ? (
-                    <button
-                      type="button"
-                      onClick={() => startEdit(visit.id, visit.technicalNote)}
-                      className="border-border bg-background hover:bg-muted inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-xl border px-3 py-2 text-[13px] font-medium"
-                    >
-                      <Pencil className="size-3.5" strokeWidth={2} />
-                      {visit.technicalNote ? "Editar nota" : "Agregar nota"}
-                    </button>
-                  ) : null}
-                </div>
+                {initial}
+              </span>
+              <div className="min-w-0 flex-1">
+                <h1 className="truncate text-[20px] leading-tight font-bold tracking-tight">
+                  {name}
+                </h1>
+                <p className="text-muted-foreground mt-1 truncate text-[13px]">
+                  {client.phone}
+                  <span className="text-muted-foreground/50 mx-1.5">·</span>
+                  {visitsLabel}
+                </p>
+              </div>
+            </div>
 
-                {!isEditing && visit.technicalNote ? (
-                  <div className="border-primary/20 bg-primary/5 mt-3 rounded-xl border px-3 py-3">
-                    <p className="text-primary mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
-                      <FileText className="size-3.5" strokeWidth={2} />
-                      Ficha técnica
-                    </p>
-                    <p className="text-sm leading-relaxed whitespace-pre-wrap">
-                      {visit.technicalNote}
-                    </p>
-                  </div>
-                ) : null}
+            {waUrl ? (
+              <a
+                href={waUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="mt-4 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#128C7E]/25 bg-[#128C7E]/10 text-[14px] font-semibold text-[#128C7E] transition hover:bg-[#128C7E]/15"
+              >
+                <WhatsAppIcon className="size-4" />
+                Enviar WhatsApp
+              </a>
+            ) : null}
+          </div>
+        </header>
 
-                {!isEditing && !visit.technicalNote ? (
-                  <p className="text-muted-foreground/80 mt-3 text-[13px]">
-                    Sin ficha técnica para esta visita.
-                  </p>
-                ) : null}
-
-                {isEditing ? (
-                  <div className="border-border mt-3 border-t pt-3">
-                    <label htmlFor={`note-${visit.id}`} className="text-sm font-semibold">
-                      Ficha técnica
-                    </label>
-                    <textarea
-                      id={`note-${visit.id}`}
-                      value={draftNote}
-                      onChange={(event) => setDraftNote(event.target.value)}
-                      rows={5}
-                      placeholder="Ej: Color 20% rojo suave, oxidante 20 vol, 35 min…"
-                      className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 mt-2 min-h-[120px] w-full resize-y rounded-xl border px-3 py-2.5 text-sm outline-none focus-visible:ring-[3px]"
-                    />
-                    <p className="text-muted-foreground mt-2 text-xs">
-                      Vista previa de UI: todavía no se guarda en el servidor.
-                    </p>
-                    <div className="mt-3 flex gap-2">
-                      <button
-                        type="button"
-                        onClick={() => saveNote(visit.id)}
-                        className="bg-primary text-primary-foreground flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full text-[15px] font-semibold"
-                      >
-                        Guardar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={cancelEdit}
-                        className="border-border bg-background text-foreground flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full border text-[15px] font-medium"
-                      >
-                        Cancelar
-                      </button>
-                    </div>
-                  </div>
-                ) : null}
-
-                <Link
-                  href={`/${slug}/agenda?date=${encodeURIComponent(visit.localDate)}` as Route}
-                  className={cn(
-                    "text-muted-foreground mt-3 inline-block text-[13px] underline-offset-4 hover:underline",
-                  )}
-                >
-                  Ver en agenda
-                </Link>
-              </article>
-            );
-          })
-        )}
-
-        {hasMoreAppointments ? (
-          <p className="text-muted-foreground text-center text-sm">
-            Mostramos los {appointmentLimit} turnos más recientes.
-          </p>
+        {client.notes ? (
+          <div className="border-border bg-card mb-5 rounded-[24px] border px-4 py-3 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
+            <p className="text-muted-foreground text-[11px] font-semibold tracking-wide uppercase">
+              Notas del cliente
+            </p>
+            <p className="mt-1 text-[14px] leading-relaxed whitespace-pre-wrap">{client.notes}</p>
+          </div>
         ) : null}
-      </section>
-    </main>
+
+        <section className="space-y-4 pb-8">
+          <p className="text-muted-foreground text-[13px] font-semibold tracking-wide uppercase">
+            Historial de visitas
+          </p>
+
+          {visits.length === 0 ? (
+            <p className="text-muted-foreground py-8 text-center text-[15px]">
+              Todavía no tiene turnos en este negocio.
+            </p>
+          ) : (
+            visits.map((visit) => {
+              const isEditing = editingId === visit.id;
+              return (
+                <article
+                  key={visit.id}
+                  className="border-border bg-card overflow-hidden rounded-[24px] border p-4 shadow-[0_4px_20px_rgba(0,0,0,0.05)]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[16px] font-semibold tracking-tight">
+                        {visit.serviceName}
+                      </p>
+                      <p className="text-muted-foreground mt-1 text-[14px]">
+                        {formatVisitDate(visit.localDate)} · {visit.localTime} hs
+                      </p>
+                      <p className="text-muted-foreground/70 mt-0.5 text-[13px]">
+                        {visit.professionalName}
+                      </p>
+                      <p className="text-muted-foreground/60 mt-1 text-[12px]">
+                        {visitStatusLabel(visit.status)}
+                      </p>
+                    </div>
+                    {canWrite && !isEditing ? (
+                      <button
+                        type="button"
+                        onClick={() => startEdit(visit.id, visit.technicalNote)}
+                        className="border-border bg-card hover:bg-muted inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-xl border px-3 py-2 text-[13px] font-medium shadow-sm"
+                      >
+                        <Pencil className="size-3.5" strokeWidth={2} />
+                        {visit.technicalNote ? "Editar nota" : "Agregar nota"}
+                      </button>
+                    ) : null}
+                  </div>
+
+                  {!isEditing && visit.technicalNote ? (
+                    <div className="border-primary/20 bg-primary/5 mt-3 rounded-xl border px-3 py-3">
+                      <p className="text-primary mb-1 flex items-center gap-1.5 text-[11px] font-semibold tracking-wide uppercase">
+                        <FileText className="size-3.5" strokeWidth={2} />
+                        Ficha técnica
+                      </p>
+                      <p className="text-[14px] leading-relaxed whitespace-pre-wrap">
+                        {visit.technicalNote}
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {!isEditing && !visit.technicalNote ? (
+                    <p className="text-muted-foreground/70 mt-3 text-[13px]">
+                      Sin ficha técnica para esta visita.
+                    </p>
+                  ) : null}
+
+                  {isEditing ? (
+                    <div className="border-border mt-3 border-t pt-3">
+                      <label htmlFor={`note-${visit.id}`} className="text-[14px] font-semibold">
+                        Ficha técnica
+                      </label>
+                      <textarea
+                        id={`note-${visit.id}`}
+                        value={draftNote}
+                        onChange={(event) => setDraftNote(event.target.value)}
+                        rows={5}
+                        placeholder="Ej: Color 20% rojo suave, oxidante 20 vol, 35 min…"
+                        className="border-input bg-background focus-visible:border-ring focus-visible:ring-ring/50 mt-2 min-h-[120px] w-full resize-y rounded-xl border px-3 py-2.5 text-[14px] outline-none focus-visible:ring-[3px]"
+                      />
+                      <p className="text-muted-foreground mt-2 text-xs">
+                        Vista previa de UI: todavía no se guarda en el servidor.
+                      </p>
+                      <div className="mt-3 flex gap-2">
+                        <button
+                          type="button"
+                          onClick={() => saveNote(visit.id)}
+                          className="bg-primary text-primary-foreground flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full text-[15px] font-semibold shadow-sm"
+                        >
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={cancelEdit}
+                          className="border-border bg-card text-foreground flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full border text-[15px] font-medium"
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+                </article>
+              );
+            })
+          )}
+
+          {hasMoreAppointments ? (
+            <p className="text-muted-foreground text-center text-sm">
+              Mostramos los {appointmentLimit} turnos más recientes.
+            </p>
+          ) : null}
+        </section>
+      </main>
+    </div>
   );
 }
