@@ -4,6 +4,9 @@ import { parseEnv } from "./parse";
 
 const clientEnvSchema = z.object({
   NEXT_PUBLIC_APP_URL: z.url(),
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: z.string().startsWith("pk_"),
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: z.string(),
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: z.string(),
 });
 
 // Next.js reemplaza `process.env.NEXT_PUBLIC_*` por el valor literal durante el
@@ -11,4 +14,7 @@ const clientEnvSchema = z.object({
 // cada variable se enumera una por una en lugar de pasar `process.env` completo.
 export const clientEnv = parseEnv(clientEnvSchema, {
   NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+  NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY,
+  NEXT_PUBLIC_CLERK_SIGN_IN_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_IN_URL,
+  NEXT_PUBLIC_CLERK_SIGN_UP_URL: process.env.NEXT_PUBLIC_CLERK_SIGN_UP_URL,
 });

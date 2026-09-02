@@ -1,0 +1,39 @@
+---
+description: Clean Architecture — dependencias siempre hacia dominio y aplicación
+alwaysApply: true
+---
+
+# Clean Architecture
+
+Clean Architecture es una ley del proyecto (ADR-019), combinada con la organización modular del ADR-011.
+
+## Dirección obligatoria
+
+`frameworks/drivers → adapters → application → domain`
+
+- **Domain:** entidades, value objects, invariantes, políticas y errores de negocio. TypeScript puro, determinista y sin I/O.
+- **Application:** casos de uso y puertos propios. Puede importar dominio; no conoce tecnología concreta.
+- **Adapters:** traducen entradas/salidas e implementan puertos: UI, Server Actions, Route Handlers, webhooks, repositorios y gateways.
+- **Frameworks/drivers:** Next.js, React, Prisma, PostgreSQL, Clerk, Trigger.dev, R2, pagos y mensajería.
+
+## Prohibiciones
+
+- `domain/` y `application/` no importan React, Next.js, Prisma, Clerk ni SDK de proveedor.
+- Componentes, handlers, middleware y repositorios no contienen reglas de negocio.
+- Un caso de uso no recibe `Request`, `FormData`, `PrismaClient` ni objetos de sesión del proveedor.
+- Los tipos externos se traducen en el adaptador; no atraviesan el puerto.
+- Un cambio de proveedor no obliga a modificar dominio ni casos de uso.
+
+## Aplicación proporcional
+
+- Toda operación de negocio entra por un caso de uso.
+- Crear `domain/` solo cuando existan reglas independientes de tecnología.
+- No crear carpetas vacías, interfaces sin frontera real ni abstracciones “por si acaso”.
+- El contrato pertenece al consumidor interno; la implementación, al adaptador externo.
+- La UI decide texto, color y presentación a partir de errores tipados; el dominio decide la regla.
+
+Antes de terminar un cambio, comprobar:
+
+> ¿Dominio y aplicación seguirían compilando y siendo testeables sin Next.js, Prisma, Clerk ni proveedores?
+
+La fuente autoritativa es `docs/03-architecture.md` §2, `docs/05-folder-structure.md` §10 y el ADR-019.

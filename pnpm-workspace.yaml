@@ -3,5 +3,8 @@
 # sharp: binario nativo de optimización de imágenes que usa Next.js.
 # unrs-resolver: resolvedor nativo que usa el plugin de imports de ESLint.
 allowBuilds:
+  "@prisma/engines": true
+  esbuild: true
+  prisma: true
   sharp: true
   unrs-resolver: true

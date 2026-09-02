@@ -29,10 +29,84 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ["src/lib/env/*.ts", "*.config.ts", "*.config.mjs"],
+    files: ["src/lib/env/*.ts", "*.config.ts", "*.config.mjs", "prisma/seed.ts"],
     rules: { "no-restricted-properties": "off" },
   },
-  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts"]),
+  {
+    files: ["src/modules/*/{application,domain}/**/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next",
+              message: "Dominio y aplicación no importan Next.js.",
+            },
+            {
+              name: "react",
+              message: "Dominio y aplicación no importan React.",
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                "next/*",
+                "react-dom",
+                "react-dom/*",
+                "@clerk/*",
+                "@prisma/*",
+                "@/generated/*",
+                "@/server/*",
+                "@/app/*",
+              ],
+              message:
+                "Dominio y aplicación no importan frameworks, Prisma, Clerk ni el borde HTTP.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  {
+    files: ["src/core/**/{application,domain}/**/*.ts", "src/core/*.ts"],
+    ignores: ["**/*.test.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            {
+              name: "next",
+              message: "El núcleo compartido no importa Next.js.",
+            },
+            {
+              name: "react",
+              message: "El núcleo compartido no importa React.",
+            },
+          ],
+          patterns: [
+            {
+              group: [
+                "next/*",
+                "react-dom",
+                "react-dom/*",
+                "@clerk/*",
+                "@prisma/*",
+                "@/generated/*",
+                "@/server/*",
+                "@/app/*",
+                "@/modules/*",
+              ],
+              message: "El núcleo compartido no importa frameworks ni módulos de dominio.",
+            },
+          ],
+        },
+      ],
+    },
+  },
+  globalIgnores([".next/**", "out/**", "build/**", "next-env.d.ts", "src/generated/**"]),
 ]);
 
 export default eslintConfig;

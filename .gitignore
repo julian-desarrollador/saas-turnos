@@ -6,6 +6,8 @@
 /out/
 /build
 
+*.md
+
 # testing
 /coverage
 
@@ -14,8 +16,6 @@
 .env*
 !.env.example
 
-
-*.md
 # vercel
 .vercel
 
@@ -30,3 +30,5 @@ Thumbs.db
 
 # logs
 *-debug.log*
+
+/src/generated/prisma

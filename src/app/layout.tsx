@@ -1,12 +1,11 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
+import { ClerkProvider } from "@clerk/nextjs";
 
 import { cn } from "@/lib/utils";
 
 import "./globals.css";
 
-// next/font descarga la tipografía en el build y la sirve desde nuestro dominio,
-// así que no hay pedidos del navegador a Google en tiempo de ejecución.
 const geist = Geist({ subsets: ["latin"], variable: "--font-sans" });
 
 export const metadata: Metadata = {
@@ -21,7 +20,9 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="es" className={cn("font-sans", geist.variable)}>
-      <body>{children}</body>
+      <body>
+        <ClerkProvider>{children}</ClerkProvider>
+      </body>
     </html>
   );
 }
