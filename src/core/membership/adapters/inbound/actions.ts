@@ -83,20 +83,21 @@ export async function inviteMemberAction(
   formData: FormData,
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
+  const email = readString(formData, "email");
+
   try {
     const ctx = await resolveTenantContext(slug);
     const { inviteMember } = membershipApp();
     await inviteMember({
       actor: actorFrom(ctx),
-      email: readString(formData, "email"),
+      email,
       role: readString(formData, "role"),
     });
-    revalidatePath(`/${slug}/members`);
-    return {
-      ok: true,
-      message: "Invitación enviada. La persona va a recibir un correo de Clerk.",
-    };
   } catch (error) {
     return toActionState(error);
   }
+
+  revalidatePath(`/${slug}/members`);
+  const params = new URLSearchParams({ invited: "1", who: email });
+  redirect(`/${slug}/members?${params.toString()}` as never);
 }

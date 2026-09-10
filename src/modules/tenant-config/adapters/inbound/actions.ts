@@ -94,10 +94,6 @@ function readInt(formData: FormData, key: string, fallback = 0): number {
   return Number(raw);
 }
 
-function readCheckbox(formData: FormData, key: string): boolean {
-  return formData.get(key) === "on";
-}
-
 function readTime(formData: FormData, key: string): string | null {
   const value = readOptionalString(formData, key);
   if (!value) {
@@ -162,6 +158,16 @@ function teamHref(slug: string, query: Record<string, string>): string {
   return `/${slug}/professionals?${params.toString()}`;
 }
 
+function scheduleHref(slug: string, query: Record<string, string>): string {
+  const params = new URLSearchParams(query);
+  return `/${slug}/schedule?${params.toString()}`;
+}
+
+function servicesHref(slug: string, query: Record<string, string>): string {
+  const params = new URLSearchParams(query);
+  return `/${slug}/services?${params.toString()}`;
+}
+
 export async function loadProfessionalsPage(slug: string) {
   const { ctx, actor } = await actorForSlug(slug);
   const [professionals, services, branches, slots] = await Promise.all([
@@ -213,12 +219,32 @@ export async function loadProfessionalCreatePage(slug: string) {
 
 export async function loadServicesPage(slug: string) {
   const { ctx, actor } = await actorForSlug(slug);
-  const services = await listServices(actor);
+  const [services, professionals] = await Promise.all([
+    listServices(actor),
+    listProfessionals(actor),
+  ]);
   return {
     tenantName: ctx.tenant.name,
-    role: actor.role,
     canWrite: hasPermission(actor.role, "catalog.write"),
     services,
+    professionals,
+  };
+}
+
+export async function loadServiceCreatePage(slug: string) {
+  const { actor } = await actorForSlug(slug);
+  return {
+    canWrite: hasPermission(actor.role, "catalog.write"),
+  };
+}
+
+export async function loadServicePage(slug: string, serviceId: string) {
+  const { actor } = await actorForSlug(slug);
+  const services = await listServices(actor);
+  const service = services.find((item) => item.id === serviceId) ?? null;
+  return {
+    canWrite: hasPermission(actor.role, "catalog.write"),
+    service,
   };
 }
 
@@ -310,10 +336,43 @@ export async function createServiceAction(
   formData: FormData,
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
+  const name = readString(formData, "name");
+
   try {
     const { actor } = await actorForSlug(slug);
     await createService({
       actor,
+      name,
+      durationMinutes: readInt(formData, "durationMinutes"),
+      priceAmount: readInt(formData, "priceAmount"),
+      prepMinutes: readInt(formData, "prepMinutes", 0),
+      cleanupMinutes: readInt(formData, "cleanupMinutes", 0),
+      earliestStart: readOptionalString(formData, "earliestStart"),
+      latestStart: readOptionalString(formData, "latestStart"),
+      requiresDeposit: false,
+    });
+  } catch (error) {
+    return toActionState(error);
+  }
+
+  revalidatePath(`/${slug}/services`);
+  revalidatePath(`/${slug}/professionals`);
+  redirect(servicesHref(slug, { created: "1", who: name }) as never);
+}
+
+export async function saveServiceAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  const slug = readString(formData, "slug");
+  const serviceId = readString(formData, "serviceId");
+
+  let saved;
+  try {
+    const { actor } = await actorForSlug(slug);
+    saved = await updateService({
+      actor,
+      serviceId,
       name: readString(formData, "name"),
       durationMinutes: readInt(formData, "durationMinutes"),
       priceAmount: readInt(formData, "priceAmount"),
@@ -321,71 +380,96 @@ export async function createServiceAction(
       cleanupMinutes: readInt(formData, "cleanupMinutes", 0),
       earliestStart: readOptionalString(formData, "earliestStart"),
       latestStart: readOptionalString(formData, "latestStart"),
-      requiresDeposit: readCheckbox(formData, "requiresDeposit"),
     });
-    revalidatePath(`/${slug}/services`);
-    revalidatePath(`/${slug}/professionals`);
-    return { ok: true };
   } catch (error) {
     return toActionState(error);
   }
+
+  revalidatePath(`/${slug}/services`);
+  revalidatePath(`/${slug}/services/${serviceId}`);
+  revalidatePath(`/${slug}/professionals`);
+  redirect(servicesHref(slug, { saved: "1", who: saved.name }) as never);
 }
 
-export async function updateServiceAction(
+export async function setServiceActiveAction(
   _prev: ActionState | undefined,
   formData: FormData,
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
+  const serviceId = readString(formData, "serviceId");
+  const isActive = readString(formData, "isActive") === "true";
+
+  let updated;
   try {
     const { actor } = await actorForSlug(slug);
-    const isActiveRaw = readString(formData, "isActive");
-    await updateService({
-      actor,
-      serviceId: readString(formData, "serviceId"),
-      name: readString(formData, "name") || undefined,
-      durationMinutes: formData.has("durationMinutes")
-        ? readInt(formData, "durationMinutes")
-        : undefined,
-      priceAmount: formData.has("priceAmount") ? readInt(formData, "priceAmount") : undefined,
-      prepMinutes: formData.has("prepMinutes") ? readInt(formData, "prepMinutes", 0) : undefined,
-      cleanupMinutes: formData.has("cleanupMinutes")
-        ? readInt(formData, "cleanupMinutes", 0)
-        : undefined,
-      earliestStart: formData.has("earliestStart")
-        ? readOptionalString(formData, "earliestStart")
-        : undefined,
-      latestStart: formData.has("latestStart")
-        ? readOptionalString(formData, "latestStart")
-        : undefined,
-      requiresDeposit: formData.has("requiresDepositSubmitted")
-        ? readCheckbox(formData, "requiresDeposit")
-        : undefined,
-      isActive: isActiveRaw === "" ? undefined : isActiveRaw === "true",
-    });
-    revalidatePath(`/${slug}/services`);
-    revalidatePath(`/${slug}/professionals`);
-    return { ok: true };
+    updated = await updateService({ actor, serviceId, isActive });
   } catch (error) {
     return toActionState(error);
   }
+
+  revalidatePath(`/${slug}/services`);
+  revalidatePath(`/${slug}/services/${serviceId}`);
+  revalidatePath(`/${slug}/professionals`);
+  redirect(
+    servicesHref(slug, {
+      [isActive ? "activated" : "deactivated"]: "1",
+      who: updated.name,
+    }) as never,
+  );
 }
 
 export async function loadSchedulePage(slug: string) {
   const { ctx, actor } = await actorForSlug(slug);
-  const [branches, professionals, slots, blocks] = await Promise.all([
+  const [branches, professionals, slots] = await Promise.all([
     listBranches(actor),
     listProfessionals(actor),
     listWeeklySlots(actor),
-    listCalendarBlocks(actor),
   ]);
   return {
     tenantName: ctx.tenant.name,
-    canWriteSchedule: hasPermission(actor.role, "schedule.write"),
-    canWriteBlocks: hasPermission(actor.role, "block.write"),
     branches,
     professionals,
     slots,
-    blocks,
+  };
+}
+
+export async function loadScheduleOwnerPage(
+  slug: string,
+  kind: "branch" | "professional",
+  id: string,
+) {
+  const { ctx, actor } = await actorForSlug(slug);
+  const [branches, professionals, slots] = await Promise.all([
+    listBranches(actor),
+    listProfessionals(actor),
+    listWeeklySlots(actor),
+  ]);
+
+  if (kind === "branch") {
+    const branch = branches.find((item) => item.id === id) ?? null;
+    return {
+      tenantName: ctx.tenant.name,
+      canWrite: hasPermission(actor.role, "schedule.write"),
+      owner: branch
+        ? { kind: "branch" as const, id: branch.id, displayName: branch.name, isActive: true }
+        : null,
+      slots: slots.filter((slot) => slot.branchId === id && slot.professionalId === null),
+    };
+  }
+
+  const professional = professionals.find((item) => item.id === id) ?? null;
+  return {
+    tenantName: ctx.tenant.name,
+    canWrite: hasPermission(actor.role, "schedule.write"),
+    owner: professional
+      ? {
+          kind: "professional" as const,
+          id: professional.id,
+          displayName: professional.displayName,
+          isActive: professional.isActive,
+        }
+      : null,
+    slots: slots.filter((slot) => slot.professionalId === id && slot.branchId === null),
   };
 }
 
@@ -411,6 +495,8 @@ export async function setWeeklyScheduleAction(
   formData: FormData,
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
+  const ownerName = readString(formData, "ownerName");
+
   try {
     const { actor } = await actorForSlug(slug);
     await setWeeklySchedule({
@@ -418,11 +504,13 @@ export async function setWeeklyScheduleAction(
       owner: readOwner(formData),
       slots: readWeeklySlots(formData),
     });
-    revalidatePath(`/${slug}/schedule`);
-    return { ok: true };
   } catch (error) {
     return toActionState(error);
   }
+
+  revalidatePath(`/${slug}/schedule`);
+  revalidatePath(`/${slug}/professionals`);
+  redirect(scheduleHref(slug, { saved: "1", who: ownerName }) as never);
 }
 
 export async function createCalendarBlockAction(
@@ -441,7 +529,6 @@ export async function createCalendarBlockAction(
       endTime: readTime(formData, "endTime"),
       reason: readOptionalString(formData, "reason"),
     });
-    revalidatePath(`/${slug}/schedule`);
     revalidatePath(`/${slug}/agenda`);
     revalidatePath(`/${slug}/agenda/bloquear`);
     return { ok: true };
@@ -461,7 +548,6 @@ export async function deleteCalendarBlockAction(
       actor,
       blockId: readString(formData, "blockId"),
     });
-    revalidatePath(`/${slug}/schedule`);
     revalidatePath(`/${slug}/agenda`);
     revalidatePath(`/${slug}/agenda/bloquear`);
     return { ok: true };

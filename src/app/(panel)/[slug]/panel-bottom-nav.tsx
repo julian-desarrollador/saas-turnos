@@ -105,7 +105,7 @@ function BottomNavBar({
         <button
           type="button"
           className={cn(
-            "flex min-h-14 flex-col items-center justify-center gap-1 text-xs",
+            "flex min-h-14 cursor-pointer flex-col items-center justify-center gap-1 text-xs",
             moreOpen || moreActive ? "text-foreground font-medium" : "text-muted-foreground",
           )}
           aria-expanded={moreOpen}

@@ -41,7 +41,7 @@ export function ProfessionalEditScreen({
   const [confirmOpen, setConfirmOpen] = useState(false);
 
   const listHref = `/${slug}/professionals` as Route;
-  const scheduleHref = `/${slug}/schedule` as Route;
+  const scheduleHref = `/${slug}/schedule/profesional/${professional.id}` as Route;
   const nextActive = !professional.isActive;
 
   return (
