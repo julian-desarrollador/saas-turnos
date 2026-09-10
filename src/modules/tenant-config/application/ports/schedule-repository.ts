@@ -57,7 +57,7 @@ export type WeeklyScheduleRepository = {
 
 export type CalendarBlockRepository = {
   listByTenant(tenantId: string): Promise<CalendarBlockRecord[]>;
-  create(data: CreateCalendarBlockData): Promise<CalendarBlockRecord | null>;
+  createMany(items: CreateCalendarBlockData[]): Promise<CalendarBlockRecord[] | null>;
   delete(tenantId: string, id: string): Promise<boolean>;
 };
 

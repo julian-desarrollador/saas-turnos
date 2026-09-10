@@ -29,7 +29,7 @@ export default function HomePage() {
       <Show when="signed-in">
         <div className="flex items-center gap-3">
           <Link
-            href={"/demo/dashboard" as Route}
+            href={"/demo/agenda" as Route}
             className="bg-foreground text-background rounded-md px-4 py-2 text-sm font-medium"
           >
             Ir al panel demo

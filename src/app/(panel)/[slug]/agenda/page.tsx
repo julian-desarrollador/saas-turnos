@@ -22,6 +22,12 @@ export default async function AgendaPage({ params, searchParams }: PageProps<"/[
       rescheduled={page.rescheduled}
       noShow={page.noShow}
       completed={page.completed}
+      blocked={page.blocked}
+      blockWho={page.blockWho}
+      blockFrom={page.blockFrom}
+      blockTo={page.blockTo}
+      blockStart={page.blockStart}
+      blockEnd={page.blockEnd}
     />
   );
 }

@@ -12,14 +12,14 @@ export default async function MembersPage({ params }: PageProps<"/[slug]/members
   const page = await loadMembersPage(slug);
 
   return (
-    <main className="space-y-6 p-6">
+    <main className="mx-auto w-full max-w-2xl space-y-6 p-6">
       <PageHeader
         title="Accesos"
         description={`Quién puede entrar al panel de ${page.tenantName}. Invitar no agrega a la persona en la agenda: eso se hace en Equipo.`}
       />
 
       {page.canInvite ? (
-        <Card className="max-w-xl">
+        <Card className="mx-auto max-w-xl">
           <CardHeader>
             <CardTitle>Invitar</CardTitle>
           </CardHeader>

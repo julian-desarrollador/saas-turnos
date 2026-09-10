@@ -12,6 +12,8 @@ export function AgendaNoShowForm({
   serviceId,
   appointmentId,
   appearance = "default",
+  onRequest,
+  disabled = false,
 }: {
   slug: string;
   date: string;
@@ -19,8 +21,29 @@ export function AgendaNoShowForm({
   serviceId: string;
   appointmentId: string;
   appearance?: "default" | "card";
+  /** When set, defers persistence to the parent (undo window). */
+  onRequest?: () => void;
+  disabled?: boolean;
 }) {
   const [state, formAction, pending] = useActionState(markNoShowAction, undefined);
+  const className =
+    appearance === "card"
+      ? "h-11 w-full cursor-pointer rounded-xl text-[15px] font-semibold"
+      : "h-10 min-h-10 cursor-pointer";
+
+  if (onRequest) {
+    return (
+      <Button
+        type="button"
+        variant={appearance === "card" ? "outline" : "secondary"}
+        className={className}
+        disabled={disabled || pending}
+        onClick={onRequest}
+      >
+        Ausente
+      </Button>
+    );
+  }
 
   return (
     <form action={formAction} className="grid gap-1">
@@ -32,12 +55,8 @@ export function AgendaNoShowForm({
       <Button
         type="submit"
         variant={appearance === "card" ? "outline" : "secondary"}
-        className={
-          appearance === "card"
-            ? "h-11 w-full rounded-xl text-[15px] font-semibold"
-            : "h-10 min-h-10"
-        }
-        disabled={pending}
+        className={className}
+        disabled={disabled || pending}
       >
         {pending ? "Marcando…" : "Ausente"}
       </Button>

@@ -73,6 +73,24 @@ function readQueryValue(value: string | string[] | undefined): string {
   return "";
 }
 
+function readOptionalLocalDate(value: string | string[] | undefined): string | null {
+  const raw = readQueryValue(value);
+  return isLocalDate(raw) ? raw : null;
+}
+
+function readOptionalLocalTime(value: string | string[] | undefined): string | null {
+  const raw = readQueryValue(value);
+  return isLocalTime(raw) ? raw : null;
+}
+
+function readOptionalBlockWho(value: string | string[] | undefined): string | null {
+  const trimmed = readQueryValue(value).trim();
+  if (!trimmed) {
+    return null;
+  }
+  return trimmed.length > 120 ? `${trimmed.slice(0, 119)}…` : trimmed;
+}
+
 function readString(formData: FormData, key: string): string {
   const value = formData.get(key);
   return typeof value === "string" ? value.trim() : "";
@@ -99,6 +117,12 @@ function agendaHomeHref(
     rescheduled?: boolean;
     noShow?: boolean;
     completed?: boolean;
+    blocked?: boolean;
+    blockFrom?: string;
+    blockTo?: string;
+    blockStart?: string;
+    blockEnd?: string;
+    blockWho?: string;
   },
 ): string {
   const params = new URLSearchParams();
@@ -123,6 +147,24 @@ function agendaHomeHref(
   if (query.completed) {
     params.set("completed", "1");
   }
+  if (query.blocked) {
+    params.set("blocked", "1");
+    if (query.blockFrom) {
+      params.set("blockFrom", query.blockFrom);
+    }
+    if (query.blockTo) {
+      params.set("blockTo", query.blockTo);
+    }
+    if (query.blockStart) {
+      params.set("blockStart", query.blockStart);
+    }
+    if (query.blockEnd) {
+      params.set("blockEnd", query.blockEnd);
+    }
+    if (query.blockWho) {
+      params.set("blockWho", query.blockWho);
+    }
+  }
   return `/${slug}/agenda?${params.toString()}`;
 }
 
@@ -143,6 +185,12 @@ export async function loadAgendaHomePage(
     rescheduled?: string | string[];
     noShow?: string | string[];
     completed?: string | string[];
+    blocked?: string | string[];
+    blockFrom?: string | string[];
+    blockTo?: string | string[];
+    blockStart?: string | string[];
+    blockEnd?: string | string[];
+    blockWho?: string | string[];
   },
 ) {
   const ctx = await resolveTenantContext(slug);
@@ -172,6 +220,12 @@ export async function loadAgendaHomePage(
     rescheduled: readQueryValue(query.rescheduled) === "1",
     noShow: readQueryValue(query.noShow) === "1",
     completed: readQueryValue(query.completed) === "1",
+    blocked: readQueryValue(query.blocked) === "1",
+    blockFrom: readOptionalLocalDate(query.blockFrom) ?? readOptionalLocalDate(query.date),
+    blockTo: readOptionalLocalDate(query.blockTo),
+    blockStart: readOptionalLocalTime(query.blockStart),
+    blockEnd: readOptionalLocalTime(query.blockEnd),
+    blockWho: readOptionalBlockWho(query.blockWho),
   };
 }
 
@@ -500,15 +554,7 @@ export async function markCompletedAction(
   }
 }
 
-export async function loadReschedulePage(
-  slug: string,
-  appointmentId: string,
-  query: {
-    date?: string | string[];
-    professional?: string | string[];
-    time?: string | string[];
-  },
-) {
+export async function loadReschedulePage(slug: string, appointmentId: string) {
   const ctx = await resolveTenantContext(slug);
   const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
   const appointment = await getAppointment({ actor, appointmentId });
@@ -516,64 +562,82 @@ export async function loadReschedulePage(
   const professionals = catalog.professionals.filter((professional) =>
     professional.serviceIds.includes(appointment.serviceId),
   );
-  const date = readQueryValue(query.date) || appointment.localDate;
-  const requestedProfessional = readQueryValue(query.professional);
-  const professionalId = professionals.some((item) => item.id === requestedProfessional)
-    ? requestedProfessional
-    : professionals.some((item) => item.id === appointment.professionalId)
-      ? appointment.professionalId
-      : (professionals[0]?.id ?? "");
-  const requestedTime = readQueryValue(query.time);
-  const selectedTime = isLocalTime(requestedTime) ? requestedTime : "";
   const movable = canRescheduleAppointment(appointment.status);
-
-  let slots: string[] = [];
-  let error: string | undefined;
-  if (movable && professionalId && isLocalDate(date)) {
-    try {
-      slots = await listAvailableSlots({
-        actor,
-        professionalId,
-        serviceId: appointment.serviceId,
-        localDate: date,
-        now: new Date(),
-        excludeAppointmentId: appointment.id,
-      });
-      if (professionalId === appointment.professionalId && date === appointment.localDate) {
-        slots = slots.filter((slot) => slot !== appointment.localTime);
-      }
-    } catch (caught) {
-      if (caught instanceof ForbiddenError) {
-        throw caught;
-      }
-      if (caught instanceof BookingError && caught.code === "NOT_FOUND") {
-        error = "No encontramos ese profesional o servicio.";
-      } else if (caught instanceof BookingError) {
-        error = validationMessage(caught.reason);
-      } else {
-        throw caught;
-      }
-    }
-  } else if (movable && professionalId && !isLocalDate(date)) {
-    error = validationMessage("DATE_INVALID");
-  }
 
   return {
     tenantName: ctx.tenant.name,
-    timezone: ctx.tenant.timezone,
+    today: zonedCivilNow(ctx.tenant.timezone, new Date()).localDate,
     appointment: {
       ...appointment,
       endTime: occupancyEndTime(appointment.localTime, appointment.durationMinutes),
       movable,
     },
-    date,
-    professionalId,
-    selectedTime,
     canWrite: hasPermission(actor.role, "booking.write"),
     professionals,
-    slots,
-    error,
   };
+}
+
+export async function fetchRescheduleSlotsAction(
+  slug: string,
+  appointmentId: string,
+  professionalId: string,
+  localDate: string,
+): Promise<AvailableSlotsPayload> {
+  const ctx = await resolveTenantContext(slug);
+  const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
+  const now = new Date();
+
+  if (!professionalId || !isLocalDate(localDate)) {
+    return { slots: [], emptyReason: null, error: "Revisá el profesional y el día." };
+  }
+
+  try {
+    const appointment = await getAppointment({ actor, appointmentId });
+    if (!canRescheduleAppointment(appointment.status)) {
+      return {
+        slots: [],
+        emptyReason: null,
+        error: validationMessage("NOT_MOVABLE"),
+      };
+    }
+
+    let slots = await listAvailableSlots({
+      actor,
+      professionalId,
+      serviceId: appointment.serviceId,
+      localDate,
+      now,
+      excludeAppointmentId: appointment.id,
+    });
+    if (professionalId === appointment.professionalId && localDate === appointment.localDate) {
+      slots = slots.filter((slot) => slot !== appointment.localTime);
+    }
+    if (slots.length > 0) {
+      return { slots, emptyReason: null };
+    }
+
+    const snapshot = await repo.loadSnapshot(
+      actor.tenantId,
+      professionalId,
+      appointment.serviceId,
+      localDate,
+    );
+    return {
+      slots: [],
+      emptyReason: snapshot ? emptySlotsReason(snapshot, localDate, now) : null,
+    };
+  } catch (caught) {
+    if (caught instanceof ForbiddenError) {
+      throw caught;
+    }
+    if (caught instanceof BookingError && caught.code === "NOT_FOUND") {
+      return { slots: [], emptyReason: null, error: "No encontramos ese turno o profesional." };
+    }
+    if (caught instanceof BookingError) {
+      return { slots: [], emptyReason: null, error: validationMessage(caught.reason) };
+    }
+    throw caught;
+  }
 }
 
 export async function rescheduleAppointmentAction(

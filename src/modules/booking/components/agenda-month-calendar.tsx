@@ -8,25 +8,31 @@ export function AgendaMonthCalendar({
   monthLabel,
   selectedDate,
   grid,
-  activeDates,
+  appointmentDates,
+  blockDates,
   onSelectDate,
   onPrevMonth,
   onNextMonth,
   monthNavDisabled = false,
   minSelectableDate,
+  rangeEndDate,
 }: {
   monthLabel: string;
   selectedDate: string;
   grid: MonthCell[];
-  activeDates: string[];
+  appointmentDates: string[];
+  blockDates: string[];
   onSelectDate: (dateKey: string) => void;
   onPrevMonth: () => void;
   onNextMonth: () => void;
   monthNavDisabled?: boolean;
   /** Si está definido, los días anteriores no se pueden elegir (p. ej. alta de turno). */
   minSelectableDate?: string;
+  /** Inclusive end of a selected range; start is `selectedDate`. */
+  rangeEndDate?: string;
 }) {
-  const active = new Set(activeDates);
+  const withAppointments = new Set(appointmentDates);
+  const withBlocks = new Set(blockDates);
 
   return (
     <section className="bg-card rounded-2xl border p-4 shadow-sm">
@@ -35,7 +41,7 @@ export function AgendaMonthCalendar({
           type="button"
           onClick={onPrevMonth}
           disabled={monthNavDisabled}
-          className="text-muted-foreground hover:bg-muted absolute left-0 flex size-9 items-center justify-center rounded-xl disabled:opacity-50"
+          className="text-muted-foreground hover:bg-muted absolute left-0 flex size-9 cursor-pointer items-center justify-center rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Mes anterior"
         >
           <ChevronLeft className="size-5" />
@@ -47,7 +53,7 @@ export function AgendaMonthCalendar({
           type="button"
           onClick={onNextMonth}
           disabled={monthNavDisabled}
-          className="text-muted-foreground hover:bg-muted absolute right-0 flex size-9 items-center justify-center rounded-xl disabled:opacity-50"
+          className="text-muted-foreground hover:bg-muted absolute right-0 flex size-9 cursor-pointer items-center justify-center rounded-xl disabled:cursor-not-allowed disabled:opacity-50"
           aria-label="Mes siguiente"
         >
           <ChevronRight className="size-5" />
@@ -64,7 +70,16 @@ export function AgendaMonthCalendar({
 
       <div className="grid grid-cols-7 gap-y-2 text-center">
         {grid.map((cell) => {
-          const selected = cell.dateKey === selectedDate;
+          const isStart = Boolean(selectedDate && cell.dateKey === selectedDate);
+          const isEnd = Boolean(rangeEndDate && cell.dateKey === rangeEndDate);
+          const inMiddle = Boolean(
+            selectedDate &&
+            rangeEndDate &&
+            rangeEndDate > selectedDate &&
+            cell.dateKey > selectedDate &&
+            cell.dateKey < rangeEndDate,
+          );
+          const selected = isStart || isEnd;
           const disabled = Boolean(minSelectableDate && cell.dateKey < minSelectableDate);
           return (
             <button
@@ -82,17 +97,23 @@ export function AgendaMonthCalendar({
                   "flex size-9 items-center justify-center rounded-full text-sm leading-none font-semibold transition",
                   cell.inMonth ? "text-foreground" : "text-muted-foreground/50",
                   disabled && "text-muted-foreground/40 line-through",
+                  inMiddle && !disabled && "bg-primary/10",
                   selected && !disabled && "bg-primary text-primary-foreground shadow-sm",
                 )}
               >
                 {cell.day}
               </span>
-              <span className="mt-0.5 flex h-2 items-center justify-center">
-                {!disabled && active.has(cell.dateKey) ? (
+              <span className="mt-0.5 flex h-2 items-center justify-center gap-0.5">
+                {!disabled && withAppointments.has(cell.dateKey) ? (
                   <span className="bg-primary block size-1.5 rounded-full" />
-                ) : (
+                ) : null}
+                {!disabled && withBlocks.has(cell.dateKey) ? (
+                  <span className="border-muted-foreground block size-1.5 rounded-full border bg-transparent" />
+                ) : null}
+                {disabled ||
+                (!withAppointments.has(cell.dateKey) && !withBlocks.has(cell.dateKey)) ? (
                   <span className="block size-1.5 rounded-full bg-transparent" />
-                )}
+                ) : null}
               </span>
             </button>
           );

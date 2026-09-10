@@ -21,7 +21,7 @@ export default async function SchedulePage({ params }: PageProps<"/[slug]/schedu
   const page = await loadSchedulePage(slug);
 
   return (
-    <main className="space-y-6 p-6">
+    <main className="mx-auto w-full max-w-2xl space-y-6 p-6">
       <PageHeader
         title="Horarios"
         description={`Semana laboral de ${page.tenantName}. Los turnos ya reservados no se modifican al cambiar este horario.`}
@@ -76,7 +76,7 @@ export default async function SchedulePage({ params }: PageProps<"/[slug]/schedu
         );
       })}
 
-      <Card className="max-w-xl">
+      <Card className="mx-auto max-w-xl">
         <CardHeader>
           <CardTitle>Bloqueos</CardTitle>
           <CardDescription>Vacaciones, feriados o un rato tapado en la agenda.</CardDescription>

@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import { sortCalendarBlocksSoonestFirst } from "@/modules/tenant-config/application/sort-calendar-blocks";
 import type {
   CalendarBlockRecord,
   CreateCalendarBlockData,
@@ -106,33 +107,33 @@ export function createMemorySchedule(seed?: {
     },
     blocks: {
       async listByTenant(tenantId) {
-        return [...blocks.values()]
-          .filter((row) => row.tenantId === tenantId)
-          .map(cloneBlock)
-          .sort((left, right) => {
-            if (left.startDate !== right.startDate) {
-              return left.startDate.localeCompare(right.startDate);
-            }
-            return (left.startTime ?? "").localeCompare(right.startTime ?? "");
-          });
+        return sortCalendarBlocksSoonestFirst(
+          [...blocks.values()].filter((row) => row.tenantId === tenantId).map(cloneBlock),
+        );
       },
-      async create(data: CreateCalendarBlockData) {
-        if (!ownerInTenant(data.tenantId, data.owner)) {
+      async createMany(items: CreateCalendarBlockData[]) {
+        const first = items[0];
+        if (!first) {
+          return [];
+        }
+        if (!ownerInTenant(first.tenantId, first.owner)) {
           return null;
         }
-        const row: CalendarBlockRecord = {
-          id: randomUUID(),
-          tenantId: data.tenantId,
-          branchId: data.owner.kind === "branch" ? data.owner.id : null,
-          professionalId: data.owner.kind === "professional" ? data.owner.id : null,
-          startDate: data.startDate,
-          endDate: data.endDate,
-          startTime: data.startTime,
-          endTime: data.endTime,
-          reason: data.reason,
-        };
-        blocks.set(row.id, row);
-        return cloneBlock(row);
+        return items.map((data) => {
+          const row: CalendarBlockRecord = {
+            id: randomUUID(),
+            tenantId: data.tenantId,
+            branchId: data.owner.kind === "branch" ? data.owner.id : null,
+            professionalId: data.owner.kind === "professional" ? data.owner.id : null,
+            startDate: data.startDate,
+            endDate: data.endDate,
+            startTime: data.startTime,
+            endTime: data.endTime,
+            reason: data.reason,
+          };
+          blocks.set(row.id, row);
+          return cloneBlock(row);
+        });
       },
       async delete(tenantId, id) {
         const row = blocks.get(id);

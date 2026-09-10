@@ -49,7 +49,7 @@ function BottomNavBar({
   const moreActive = moreLinks.some((link) => isPanelLinkActive(pathname, slug, link.path));
 
   return (
-    <div className="md:hidden">
+    <div>
       {moreOpen ? (
         <button
           type="button"

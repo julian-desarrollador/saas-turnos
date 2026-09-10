@@ -5,7 +5,8 @@ import { createMemoryAvailabilityRepository } from "@/modules/booking/adapters/o
 import type { AvailabilitySnapshot } from "@/modules/booking/application/ports/availability-repository";
 import { createListMonthAgenda } from "@/modules/booking/application/use-cases/list-month-agenda";
 import {
-  activityDates,
+  appointmentDotDates,
+  blockDotDates,
   cancelledCountOnDay,
   dayAppointments,
   dayBlocks,
@@ -122,6 +123,19 @@ describe("listMonthAgenda", () => {
           clientLastName: null,
           clientPhone: "+5491133333333",
         },
+        {
+          id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa4",
+          tenantId: tenantA,
+          professionalId: professionalA,
+          localDate: "2026-08-20",
+          localTime: "12:00",
+          durationMinutes: 50,
+          status: "CANCELLED",
+          serviceName: "Corte",
+          clientFirstName: "Nico",
+          clientLastName: null,
+          clientPhone: "+5491144444444",
+        },
       ],
       monthBlocks: [
         {
@@ -136,13 +150,25 @@ describe("listMonthAgenda", () => {
           branchId: "branch",
           branchName: "Centro",
         },
+        {
+          id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb2",
+          startDate: "2026-08-10",
+          endDate: "2026-08-10",
+          startTime: null,
+          endTime: null,
+          reason: "Almuerzo",
+          professionalId: professionalA,
+          professionalName: "Ana",
+          branchId: "branch",
+          branchName: "Centro",
+        },
       ],
     });
 
     const listMonthAgenda = createListMonthAgenda(repo);
     const month = await listMonthAgenda({ actor, yearMonth: "2026-08" });
-    assert.equal(month.appointments.length, 2);
-    assert.equal(month.blocks.length, 1);
+    assert.equal(month.appointments.length, 3);
+    assert.equal(month.blocks.length, 2);
     assert.equal(
       month.appointments.some(
         (row) => row.professionalName === "Bruno" && row.status === "CANCELLED",
@@ -151,10 +177,19 @@ describe("listMonthAgenda", () => {
     );
 
     const dateKeys = buildMonthGrid(2026, 8).map((cell) => cell.dateKey);
-    const dotsHidden = activityDates(month.appointments, month.blocks, false, dateKeys);
-    assert.equal(dotsHidden.has("2026-08-10"), true);
-    assert.equal(dotsHidden.has("2026-08-15"), true);
-    assert.equal(dotsHidden.has("2026-08-16"), true);
+    const appointmentDots = appointmentDotDates(month.appointments, false);
+    const blockDots = blockDotDates(month.blocks, dateKeys);
+    assert.equal(appointmentDots.has("2026-08-10"), true);
+    assert.equal(appointmentDots.has("2026-08-15"), false);
+    assert.equal(appointmentDots.has("2026-08-20"), false);
+    assert.equal(blockDots.has("2026-08-10"), true);
+    assert.equal(blockDots.has("2026-08-15"), true);
+    assert.equal(blockDots.has("2026-08-16"), true);
+    assert.equal(blockDots.has("2026-08-20"), false);
+
+    const withCancelledDots = appointmentDotDates(month.appointments, true);
+    assert.equal(withCancelledDots.has("2026-08-10"), true);
+    assert.equal(withCancelledDots.has("2026-08-20"), true);
 
     const visible = dayAppointments(month.appointments, "2026-08-10", false);
     assert.equal(visible.length, 1);

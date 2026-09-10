@@ -1,6 +1,6 @@
 "use client";
 
-import { Lock, Plus, Users } from "lucide-react";
+import { Lock, Plus } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { useCallback, useMemo, useState, useTransition } from "react";
@@ -9,9 +9,15 @@ import { fetchAgendaMonthAction, type AgendaMonthPayload } from "@/modules/booki
 import type { MonthBlockRecord } from "@/modules/booking/application/ports/availability-repository";
 import type { MonthAppointment } from "@/modules/booking/application/use-cases/list-month-agenda";
 import { AgendaDayPanel } from "@/modules/booking/components/agenda-day-panel";
-import { AgendaMonthCalendar } from "@/modules/booking/components/agenda-month-calendar";
 import {
-  activityDates,
+  AgendaFeedbackToast,
+  AgendaUndoToast,
+} from "@/modules/booking/components/agenda-feedback-toast";
+import { AgendaMonthCalendar } from "@/modules/booking/components/agenda-month-calendar";
+import { useDeferredAgendaStatus } from "@/modules/booking/components/use-deferred-agenda-status";
+import {
+  appointmentDotDates,
+  blockDotDates,
   cancelledCountOnDay,
   dayAppointments,
   dayBlocks,
@@ -40,6 +46,12 @@ export type AgendaHomeClientProps = {
   rescheduled: boolean;
   noShow: boolean;
   completed: boolean;
+  blocked: boolean;
+  blockWho: string | null;
+  blockFrom: string | null;
+  blockTo: string | null;
+  blockStart: string | null;
+  blockEnd: string | null;
 };
 
 export function AgendaHomeClient({
@@ -57,6 +69,12 @@ export function AgendaHomeClient({
   rescheduled,
   noShow,
   completed,
+  blocked,
+  blockWho,
+  blockFrom,
+  blockTo,
+  blockStart,
+  blockEnd,
 }: AgendaHomeClientProps) {
   const [selectedDate, setSelectedDate] = useState(initialDate);
   const [yearMonth, setYearMonth] = useState(initialMonth);
@@ -64,21 +82,29 @@ export function AgendaHomeClient({
   const [appointments, setAppointments] = useState(initialAppointments);
   const [blocks, setBlocks] = useState(initialBlocks);
   const [pending, startTransition] = useTransition();
+  const { pendingById, undoToast, commitError, schedule, undo } = useDeferredAgendaStatus();
 
   const { year, month } = monthDateRange(yearMonth);
   const grid = useMemo(() => buildMonthGrid(year, month), [year, month]);
   const monthLabel = monthTitle(year, month);
   const dateKeys = useMemo(() => grid.map((cell) => cell.dateKey), [grid]);
 
-  const activeDates = useMemo(
-    () => [...activityDates(appointments, blocks, showCancelled, dateKeys)],
-    [appointments, blocks, showCancelled, dateKeys],
+  const appointmentDates = useMemo(
+    () => [...appointmentDotDates(appointments, showCancelled)],
+    [appointments, showCancelled],
   );
+  const blockDates = useMemo(() => [...blockDotDates(blocks, dateKeys)], [blocks, dateKeys]);
 
-  const dayAppts = useMemo(
-    () => dayAppointments(appointments, selectedDate, showCancelled),
-    [appointments, selectedDate, showCancelled],
-  );
+  const dayAppts = useMemo(() => {
+    const base = dayAppointments(appointments, selectedDate, showCancelled);
+    return base
+      .filter((appointment) => pendingById[appointment.id] !== "noShow")
+      .map((appointment) =>
+        pendingById[appointment.id] === "completed"
+          ? { ...appointment, status: "COMPLETED" as const }
+          : appointment,
+      );
+  }, [appointments, selectedDate, showCancelled, pendingById]);
   const dayBlk = useMemo(() => dayBlocks(blocks, selectedDate), [blocks, selectedDate]);
   const cancelledCount = useMemo(
     () => cancelledCountOnDay(appointments, selectedDate),
@@ -103,6 +129,15 @@ export function AgendaHomeClient({
     [applyMonthPayload, slug, today],
   );
 
+  const onRemovedBlock = useCallback((blockId: string) => {
+    setBlocks((rows) => {
+      if (!rows.some((row) => row.id === blockId)) {
+        return rows;
+      }
+      return rows.filter((row) => row.id !== blockId);
+    });
+  }, []);
+
   function onSelectDate(dateKey: string) {
     const targetMonth = yearMonthFromDate(dateKey);
     if (targetMonth === yearMonth) {
@@ -121,8 +156,7 @@ export function AgendaHomeClient({
   }
 
   const addHref = `/${slug}/agenda/nuevo?date=${encodeURIComponent(selectedDate)}` as Route;
-  const scheduleHref = `/${slug}/schedule` as Route;
-  const clientsHref = `/${slug}/clients` as Route;
+  const blockHref = `/${slug}/agenda/bloquear` as Route;
 
   return (
     <main className="mx-auto max-w-md space-y-5 px-4 py-6">
@@ -143,34 +177,55 @@ export function AgendaHomeClient({
           Agregar turno
         </Link>
         <Link
-          href={scheduleHref}
+          href={blockHref}
           className="border-border bg-card text-foreground flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold"
         >
           <Lock className="size-5" strokeWidth={2.2} />
           Bloquear horario
         </Link>
       </div>
-      <Link
-        href={clientsHref}
-        className="border-border bg-card text-foreground flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold shadow-sm"
-      >
-        <Users className="size-5" strokeWidth={2.2} />
-        Clientes
-      </Link>
 
-      {booked ? <p className="text-sm font-medium">Turno confirmado.</p> : null}
-      {cancelled ? <p className="text-sm font-medium">Turno cancelado.</p> : null}
-      {rescheduled ? <p className="text-sm font-medium">Turno reprogramado.</p> : null}
-      {noShow ? (
-        <p className="text-sm font-medium">Ausencia registrada. El hueco volvió a liberarse.</p>
+      <AgendaFeedbackToast
+        booked={booked}
+        cancelled={cancelled}
+        rescheduled={rescheduled}
+        noShow={noShow}
+        completed={completed}
+        blocked={blocked}
+        blockedDetail={
+          blocked
+            ? {
+                who: blockWho,
+                from: blockFrom,
+                to: blockTo,
+                startTime: blockStart,
+                endTime: blockEnd,
+              }
+            : null
+        }
+      />
+      {undoToast ? (
+        <AgendaUndoToast
+          key={`${undoToast.kind}-${undoToast.appointmentId}`}
+          kind={undoToast.kind}
+          label={undoToast.label}
+          onUndo={() => {
+            undo(undoToast.appointmentId);
+          }}
+        />
       ) : null}
-      {completed ? <p className="text-sm font-medium">Turno marcado como atendido.</p> : null}
+      {commitError ? (
+        <p className="text-destructive text-sm" role="alert">
+          {commitError}
+        </p>
+      ) : null}
 
       <AgendaMonthCalendar
         monthLabel={monthLabel}
         selectedDate={selectedDate}
         grid={grid}
-        activeDates={activeDates}
+        appointmentDates={appointmentDates}
+        blockDates={blockDates}
         onSelectDate={onSelectDate}
         onPrevMonth={onPrevMonth}
         onNextMonth={onNextMonth}
@@ -182,12 +237,33 @@ export function AgendaHomeClient({
         date={selectedDate}
         showCancelled={showCancelled}
         cancelledCount={cancelledCount}
-        eventCount={dayAppts.length + dayBlk.length}
+        appointmentCount={dayAppts.length}
+        blockCount={dayBlk.length}
         appointments={dayAppts}
         blocks={dayBlk}
         canWrite={canWrite}
         loading={pending}
         onToggleCancelled={() => setShowCancelled((value) => !value)}
+        onRemovedBlock={onRemovedBlock}
+        onDeferStatus={(appointmentId, kind) => {
+          const appointment = appointments.find((item) => item.id === appointmentId);
+          if (!appointment) {
+            return;
+          }
+          const label =
+            [appointment.clientFirstName, appointment.clientLastName]
+              .filter((part): part is string => Boolean(part))
+              .join(" ") || "Cliente";
+          schedule({
+            appointmentId,
+            kind,
+            slug,
+            date: selectedDate,
+            professionalId: appointment.professionalId,
+            serviceId: "",
+            label,
+          });
+        }}
       />
     </main>
   );

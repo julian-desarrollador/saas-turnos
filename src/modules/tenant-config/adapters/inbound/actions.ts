@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { ForbiddenError, hasPermission, type Role } from "@/core/authorization";
 import { createPrismaCatalogRepositories } from "@/modules/tenant-config/adapters/outbound/prisma-catalog-repository";
@@ -152,18 +153,59 @@ async function actorForSlug(slug: string) {
   return { ctx, actor: actorFrom(ctx) };
 }
 
+function readServiceIds(formData: FormData): string[] {
+  return formData.getAll("serviceId").filter((value): value is string => typeof value === "string");
+}
+
+function teamHref(slug: string, query: Record<string, string>): string {
+  const params = new URLSearchParams(query);
+  return `/${slug}/professionals?${params.toString()}`;
+}
+
 export async function loadProfessionalsPage(slug: string) {
   const { ctx, actor } = await actorForSlug(slug);
-  const [professionals, services, branches] = await Promise.all([
+  const [professionals, services, branches, slots] = await Promise.all([
     listProfessionals(actor),
     listServices(actor),
     listBranches(actor),
+    listWeeklySlots(actor),
   ]);
   return {
     tenantName: ctx.tenant.name,
     role: actor.role,
     canWrite: hasPermission(actor.role, "catalog.write"),
     professionals,
+    services,
+    branches,
+    slots,
+  };
+}
+
+export async function loadProfessionalPage(slug: string, professionalId: string) {
+  const { ctx, actor } = await actorForSlug(slug);
+  const [professionals, services, slots] = await Promise.all([
+    listProfessionals(actor),
+    listServices(actor),
+    listWeeklySlots(actor),
+  ]);
+  const professional = professionals.find((item) => item.id === professionalId) ?? null;
+
+  return {
+    tenantName: ctx.tenant.name,
+    canWrite: hasPermission(actor.role, "catalog.write"),
+    professional,
+    services,
+    hasSchedule: slots.some((slot) => slot.professionalId === professionalId),
+  };
+}
+
+export async function loadProfessionalCreatePage(slug: string) {
+  const { ctx, actor } = await actorForSlug(slug);
+  const [services, branches] = await Promise.all([listServices(actor), listBranches(actor)]);
+
+  return {
+    tenantName: ctx.tenant.name,
+    canWrite: hasPermission(actor.role, "catalog.write"),
     services,
     branches,
   };
@@ -185,62 +227,82 @@ export async function createProfessionalAction(
   formData: FormData,
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
+  const displayName = readString(formData, "displayName");
+
   try {
     const { actor } = await actorForSlug(slug);
-    await createProfessional({
+    const created = await createProfessional({
       actor,
-      displayName: readString(formData, "displayName"),
-      color: readOptionalString(formData, "color"),
+      displayName,
+      color: null,
       branchId: readOptionalString(formData, "branchId"),
     });
-    revalidatePath(`/${slug}/professionals`);
-    return { ok: true };
+    const serviceIds = readServiceIds(formData);
+    if (serviceIds.length > 0) {
+      await setProfessionalServices({ actor, professionalId: created.id, serviceIds });
+    }
   } catch (error) {
     return toActionState(error);
   }
+
+  revalidatePath(`/${slug}/professionals`);
+  redirect(teamHref(slug, { created: "1", who: displayName }) as never);
 }
 
-export async function updateProfessionalAction(
+/** Nombre y servicios se guardan con un solo botón, para no perder cambios a medias. */
+export async function saveProfessionalAction(
   _prev: ActionState | undefined,
   formData: FormData,
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
+  const professionalId = readString(formData, "professionalId");
+
+  let saved;
   try {
     const { actor } = await actorForSlug(slug);
-    const isActiveRaw = readString(formData, "isActive");
-    await updateProfessional({
+    saved = await updateProfessional({
       actor,
-      professionalId: readString(formData, "professionalId"),
-      displayName: readString(formData, "displayName") || undefined,
-      color: formData.has("color") ? readOptionalString(formData, "color") : undefined,
-      isActive: isActiveRaw === "" ? undefined : isActiveRaw === "true",
+      professionalId,
+      displayName: readString(formData, "displayName"),
     });
-    revalidatePath(`/${slug}/professionals`);
-    return { ok: true };
-  } catch (error) {
-    return toActionState(error);
-  }
-}
-
-export async function setProfessionalServicesAction(
-  _prev: ActionState | undefined,
-  formData: FormData,
-): Promise<ActionState> {
-  const slug = readString(formData, "slug");
-  try {
-    const { actor } = await actorForSlug(slug);
     await setProfessionalServices({
       actor,
-      professionalId: readString(formData, "professionalId"),
-      serviceIds: formData
-        .getAll("serviceId")
-        .filter((value): value is string => typeof value === "string"),
+      professionalId,
+      serviceIds: readServiceIds(formData),
     });
-    revalidatePath(`/${slug}/professionals`);
-    return { ok: true };
   } catch (error) {
     return toActionState(error);
   }
+
+  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`/${slug}/professionals/${professionalId}`);
+  redirect(teamHref(slug, { saved: "1", who: saved.displayName }) as never);
+}
+
+export async function setProfessionalActiveAction(
+  _prev: ActionState | undefined,
+  formData: FormData,
+): Promise<ActionState> {
+  const slug = readString(formData, "slug");
+  const professionalId = readString(formData, "professionalId");
+  const isActive = readString(formData, "isActive") === "true";
+
+  let updated;
+  try {
+    const { actor } = await actorForSlug(slug);
+    updated = await updateProfessional({ actor, professionalId, isActive });
+  } catch (error) {
+    return toActionState(error);
+  }
+
+  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`/${slug}/professionals/${professionalId}`);
+  redirect(
+    teamHref(slug, {
+      [isActive ? "activated" : "deactivated"]: "1",
+      who: updated.displayName,
+    }) as never,
+  );
 }
 
 export async function createServiceAction(
@@ -327,6 +389,23 @@ export async function loadSchedulePage(slug: string) {
   };
 }
 
+export async function loadCalendarBlocksPage(slug: string) {
+  const { ctx, actor } = await actorForSlug(slug);
+  const [branches, professionals, blocks] = await Promise.all([
+    listBranches(actor),
+    listProfessionals(actor),
+    listCalendarBlocks(actor),
+  ]);
+  return {
+    slug,
+    tenantName: ctx.tenant.name,
+    canWriteBlocks: hasPermission(actor.role, "block.write"),
+    branches,
+    professionals,
+    blocks,
+  };
+}
+
 export async function setWeeklyScheduleAction(
   _prev: ActionState | undefined,
   formData: FormData,
@@ -363,6 +442,8 @@ export async function createCalendarBlockAction(
       reason: readOptionalString(formData, "reason"),
     });
     revalidatePath(`/${slug}/schedule`);
+    revalidatePath(`/${slug}/agenda`);
+    revalidatePath(`/${slug}/agenda/bloquear`);
     return { ok: true };
   } catch (error) {
     return toActionState(error);
@@ -381,6 +462,8 @@ export async function deleteCalendarBlockAction(
       blockId: readString(formData, "blockId"),
     });
     revalidatePath(`/${slug}/schedule`);
+    revalidatePath(`/${slug}/agenda`);
+    revalidatePath(`/${slug}/agenda/bloquear`);
     return { ok: true };
   } catch (error) {
     return toActionState(error);

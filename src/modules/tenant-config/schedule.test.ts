@@ -4,9 +4,11 @@ import { describe, it } from "node:test";
 import { ForbiddenError } from "@/core/authorization";
 import { createMemorySchedule } from "@/modules/tenant-config/adapters/outbound/memory-schedule-repository";
 import { TenantConfigError } from "@/modules/tenant-config/application/errors";
+import { eachInclusiveDate } from "@/modules/tenant-config/application/schedule-rules";
 import {
   createCreateCalendarBlock,
   createDeleteCalendarBlock,
+  createListCalendarBlocks,
 } from "@/modules/tenant-config/application/use-cases/blocks";
 import { createSetWeeklySchedule } from "@/modules/tenant-config/application/use-cases/schedules";
 
@@ -171,8 +173,22 @@ describe("setWeeklySchedule", () => {
   });
 });
 
+describe("eachInclusiveDate", () => {
+  it("incluye ambos extremos del rango", () => {
+    assert.deepEqual(eachInclusiveDate("2026-10-10", "2026-10-11"), ["2026-10-10", "2026-10-11"]);
+  });
+
+  it("devuelve un solo día cuando inicio y fin coinciden", () => {
+    assert.deepEqual(eachInclusiveDate("2026-10-10", "2026-10-10"), ["2026-10-10"]);
+  });
+
+  it("cruza el fin de mes en UTC", () => {
+    assert.deepEqual(eachInclusiveDate("2026-01-31", "2026-02-01"), ["2026-01-31", "2026-02-01"]);
+  });
+});
+
 describe("calendar blocks", () => {
-  it("permite a recepción crear un bloqueo", async () => {
+  it("permite a recepción crear un bloqueo por cada día del rango", async () => {
     const createCalendarBlock = createCreateCalendarBlock(repos());
     const created = await createCalendarBlock({
       actor: receptionA,
@@ -184,8 +200,44 @@ describe("calendar blocks", () => {
       reason: "Feriado",
     });
 
-    assert.equal(created.reason, "Feriado");
-    assert.equal(created.professionalId, professionalA);
+    assert.equal(created.length, 3);
+    assert.deepEqual(
+      created.map((block) => block.startDate),
+      ["2026-12-24", "2026-12-25", "2026-12-26"],
+    );
+    assert.ok(
+      created.every(
+        (block) =>
+          block.startDate === block.endDate &&
+          block.reason === "Feriado" &&
+          block.professionalId === professionalA,
+      ),
+    );
+  });
+
+  it("quitar un día de un rango no borra los demás", async () => {
+    const schedule = repos();
+    const createCalendarBlock = createCreateCalendarBlock(schedule);
+    const deleteCalendarBlock = createDeleteCalendarBlock(schedule);
+
+    const created = await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-10-10",
+      endDate: "2026-10-11",
+      startTime: null,
+      endTime: null,
+      reason: "Vacaciones",
+    });
+
+    const friday = created.find((block) => block.startDate === "2026-10-11");
+    assert.ok(friday);
+    await deleteCalendarBlock({ actor: ownerA, blockId: friday.id });
+
+    const remaining = await schedule.blocks.listByTenant(tenantA);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0]?.startDate, "2026-10-10");
+    assert.equal(remaining[0]?.endDate, "2026-10-10");
   });
 
   it("no borra un bloqueo de otro tenant", async () => {
@@ -202,17 +254,66 @@ describe("calendar blocks", () => {
       endTime: null,
       reason: null,
     });
+    const createdBlock = created[0];
+    assert.ok(createdBlock);
 
     await assert.rejects(
       () =>
         deleteCalendarBlock({
           actor: ownerA,
-          blockId: created.id,
+          blockId: createdBlock.id,
         }),
       (error: unknown) => error instanceof TenantConfigError && error.code === "NOT_FOUND",
     );
 
     const remaining = await schedule.blocks.listByTenant(tenantB);
     assert.equal(remaining.length, 1);
+  });
+
+  it("lista los bloqueos más próximos primero", async () => {
+    const schedule = repos();
+    const createCalendarBlock = createCreateCalendarBlock(schedule);
+    const listCalendarBlocks = createListCalendarBlocks(schedule);
+
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-09-25",
+      endDate: "2026-09-25",
+      startTime: "18:20",
+      endTime: "20:20",
+      reason: "tarde",
+    });
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-09-10",
+      endDate: "2026-09-11",
+      startTime: null,
+      endTime: null,
+      reason: "todo el día",
+    });
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-09-10",
+      endDate: "2026-09-10",
+      startTime: "18:20",
+      endTime: "20:20",
+      reason: "franja",
+    });
+
+    const listed = await listCalendarBlocks(ownerA);
+
+    assert.equal(listed.length, 4);
+    assert.deepEqual(
+      listed.map((block) => ({ date: block.startDate, reason: block.reason })),
+      [
+        { date: "2026-09-10", reason: "todo el día" },
+        { date: "2026-09-10", reason: "franja" },
+        { date: "2026-09-11", reason: "todo el día" },
+        { date: "2026-09-25", reason: "tarde" },
+      ],
+    );
   });
 });

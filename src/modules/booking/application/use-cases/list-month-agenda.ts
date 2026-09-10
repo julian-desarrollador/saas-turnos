@@ -52,7 +52,8 @@ export function createListMonthAgenda(repo: AvailabilityRepository) {
 }
 
 export {
-  activityDates,
+  appointmentDotDates,
+  blockDotDates,
   cancelledCountOnDay,
   dayAppointments,
   dayBlocks,

@@ -5,6 +5,7 @@ export {
   fetchAvailableSlotsAction,
   loadAgendaPage,
   loadReschedulePage,
+  fetchRescheduleSlotsAction,
   createAppointmentAction,
   cancelAppointmentAction,
   markNoShowAction,

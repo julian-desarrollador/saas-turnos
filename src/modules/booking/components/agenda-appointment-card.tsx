@@ -7,6 +7,7 @@ import type { MonthAppointment } from "@/modules/booking/application/use-cases/l
 import { AgendaCancelForm } from "@/modules/booking/components/agenda-cancel-form";
 import { AgendaCompleteForm } from "@/modules/booking/components/agenda-complete-form";
 import { AgendaNoShowForm } from "@/modules/booking/components/agenda-no-show-form";
+import type { DeferredAgendaKind } from "@/modules/booking/components/use-deferred-agenda-status";
 import { isOpenAppointment } from "@/modules/booking/domain/appointment-lifecycle";
 import { isCancelledOrNoShow } from "@/modules/booking/domain/month-grid";
 import { formatDurationLabel } from "@/modules/booking/domain/time";
@@ -85,11 +86,13 @@ export function AgendaAppointmentCard({
   date,
   appointment,
   canWrite,
+  onDeferStatus,
 }: {
   slug: string;
   date: string;
   appointment: MonthAppointment;
   canWrite: boolean;
+  onDeferStatus?: (kind: DeferredAgendaKind) => void;
 }) {
   const open = isOpenAppointment(appointment.status);
   const muted = isCancelledOrNoShow(appointment.status);
@@ -168,6 +171,13 @@ export function AgendaAppointmentCard({
               serviceId=""
               appointmentId={appointment.id}
               appearance="card"
+              onRequest={
+                onDeferStatus
+                  ? () => {
+                      onDeferStatus("completed");
+                    }
+                  : undefined
+              }
             />
             <AgendaNoShowForm
               slug={slug}
@@ -176,6 +186,13 @@ export function AgendaAppointmentCard({
               serviceId=""
               appointmentId={appointment.id}
               appearance="card"
+              onRequest={
+                onDeferStatus
+                  ? () => {
+                      onDeferStatus("noShow");
+                    }
+                  : undefined
+              }
             />
           </div>
 

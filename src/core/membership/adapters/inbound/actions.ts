@@ -64,7 +64,7 @@ export async function loadMembersPage(slug: string) {
   const ctx = await resolveTenantContext(slug);
   const actor = actorFrom(ctx);
   if (!hasPermission(actor.role, "members.read")) {
-    redirect(`/${slug}/dashboard` as never);
+    redirect(`/${slug}/agenda` as never);
   }
 
   const { listMembers, listPendingInvites } = membershipApp();

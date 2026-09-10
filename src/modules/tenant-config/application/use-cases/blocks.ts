@@ -12,12 +12,15 @@ import {
   assertDateRange,
   assertOptionalBlockTimes,
   assertOptionalReason,
+  eachInclusiveDate,
 } from "../schedule-rules";
+import { sortCalendarBlocksSoonestFirst } from "../sort-calendar-blocks";
 
 export function createListCalendarBlocks(repos: ScheduleRepositories) {
   return async function listCalendarBlocks(actor: ScheduleActor): Promise<CalendarBlockRecord[]> {
     assertPermission(actor.role, "schedule.read");
-    return repos.blocks.listByTenant(actor.tenantId);
+    const blocks = await repos.blocks.listByTenant(actor.tenantId);
+    return sortCalendarBlocksSoonestFirst(blocks);
   };
 }
 
@@ -30,7 +33,7 @@ export function createCreateCalendarBlock(repos: ScheduleRepositories) {
     startTime: string | null;
     endTime: string | null;
     reason: string | null;
-  }): Promise<CalendarBlockRecord> {
+  }): Promise<CalendarBlockRecord[]> {
     assertPermission(input.actor.role, "block.write");
     if ((input.owner.kind !== "branch" && input.owner.kind !== "professional") || !input.owner.id) {
       throw new TenantConfigError("VALIDATION", "SCHEDULE_OWNER_REQUIRED", "owner");
@@ -41,16 +44,19 @@ export function createCreateCalendarBlock(repos: ScheduleRepositories) {
     assertDateRange(startDate, endDate);
     const times = assertOptionalBlockTimes(input.startTime, input.endTime);
     const reason = assertOptionalReason(input.reason);
+    const dates = eachInclusiveDate(startDate, endDate);
 
-    const created = await repos.blocks.create({
-      tenantId: input.actor.tenantId,
-      owner: input.owner,
-      startDate,
-      endDate,
-      startTime: times.startTime,
-      endTime: times.endTime,
-      reason,
-    });
+    const created = await repos.blocks.createMany(
+      dates.map((date) => ({
+        tenantId: input.actor.tenantId,
+        owner: input.owner,
+        startDate: date,
+        endDate: date,
+        startTime: times.startTime,
+        endTime: times.endTime,
+        reason,
+      })),
+    );
     if (!created) {
       notFound();
     }

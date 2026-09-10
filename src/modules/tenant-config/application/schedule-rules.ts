@@ -85,6 +85,30 @@ export function assertDateRange(startDate: string, endDate: string): void {
   }
 }
 
+function formatUtcDate(date: Date): string {
+  const year = String(date.getUTCFullYear()).padStart(4, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addUtcDays(isoDate: string, days: number): string {
+  const year = Number(isoDate.slice(0, 4));
+  const month = Number(isoDate.slice(5, 7));
+  const day = Number(isoDate.slice(8, 10));
+  return formatUtcDate(new Date(Date.UTC(year, month - 1, day + days)));
+}
+
+export function eachInclusiveDate(startDate: string, endDate: string): string[] {
+  const dates: string[] = [];
+  let current = startDate;
+  while (current <= endDate) {
+    dates.push(current);
+    current = addUtcDays(current, 1);
+  }
+  return dates;
+}
+
 export function assertOptionalBlockTimes(
   startTime: string | null,
   endTime: string | null,

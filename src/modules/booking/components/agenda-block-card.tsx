@@ -1,8 +1,10 @@
-import { Lock } from "lucide-react";
-import type { Route } from "next";
-import Link from "next/link";
+"use client";
 
+import { useActionState, useEffect, useRef } from "react";
+
+import { Button } from "@/components/ui/button";
 import type { MonthBlockRecord } from "@/modules/booking/application/ports/availability-repository";
+import { deleteCalendarBlockAction } from "@/modules/tenant-config/adapters/inbound/actions";
 
 function blockScope(block: MonthBlockRecord): string {
   if (block.professionalName) {
@@ -21,39 +23,122 @@ function blockTimeLabel(block: MonthBlockRecord): string {
   return "Día completo";
 }
 
-export function AgendaBlockCard({ slug, block }: { slug: string; block: MonthBlockRecord }) {
+export function AgendaBlockCard({
+  slug,
+  block,
+  canWrite,
+  onRemoved,
+}: {
+  slug: string;
+  block: MonthBlockRecord;
+  canWrite: boolean;
+  onRemoved: (blockId: string) => void;
+}) {
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  const removedRef = useRef(false);
+  const [state, formAction, pending] = useActionState(deleteCalendarBlockAction, undefined);
+  const label = blockScope(block);
+
+  useEffect(() => {
+    if (state?.ok && !removedRef.current) {
+      removedRef.current = true;
+      dialogRef.current?.close();
+      onRemoved(block.id);
+    }
+    if (state?.message && !state.ok) {
+      dialogRef.current?.showModal();
+    }
+  }, [state, block.id, onRemoved]);
+
+  function openConfirm() {
+    dialogRef.current?.showModal();
+  }
+
+  function closeConfirm() {
+    if (pending) {
+      return;
+    }
+    dialogRef.current?.close();
+  }
+
   return (
-    <article className="bg-card overflow-hidden rounded-[22px] border shadow-[0_6px_24px_rgba(0,0,0,0.06)]">
-      <div className="p-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="bg-muted text-foreground rounded-full px-3.5 py-1.5 text-sm leading-none font-semibold tracking-tight tabular-nums">
+    <article className="border-border bg-card rounded-xl border px-3.5 py-3">
+      <div className="flex min-w-0 items-start justify-between gap-2">
+        <div className="flex min-w-0 items-start gap-2.5">
+          <span className="bg-muted text-foreground shrink-0 rounded-full px-2.5 py-1 text-sm leading-none font-semibold tracking-tight tabular-nums">
             {blockTimeLabel(block)}
           </span>
-          <span className="text-muted-foreground text-[10px] font-semibold tracking-[0.14em]">
-            BLOQUEO
-          </span>
+          <div className="min-w-0">
+            <p className="truncate text-base font-semibold">{label}</p>
+            {block.reason ? (
+              <p className="text-muted-foreground mt-1 truncate text-sm">{block.reason}</p>
+            ) : null}
+          </div>
         </div>
 
-        <div className="mt-3 flex items-center gap-2">
-          <Lock className="text-muted-foreground size-5 shrink-0" strokeWidth={2} />
-          <h3 className="text-lg font-bold">Bloqueo de agenda</h3>
-        </div>
-
-        <p className="text-muted-foreground mt-1 text-sm">{blockScope(block)}</p>
-
-        {block.reason ? (
-          <p className="bg-muted/60 mt-3 rounded-xl px-3 py-2 text-sm leading-snug">
-            {block.reason}
-          </p>
+        {canWrite ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-muted-foreground hover:text-foreground h-auto shrink-0 cursor-pointer px-1 py-1 text-sm font-semibold"
+            disabled={pending}
+            onClick={openConfirm}
+          >
+            {pending ? "Quitando…" : "Quitar"}
+          </Button>
         ) : null}
-
-        <Link
-          href={`/${slug}/schedule` as Route}
-          className="border-border hover:bg-muted mt-3 flex h-10 w-full items-center justify-center rounded-xl border text-sm font-semibold transition"
-        >
-          Ver en Horarios
-        </Link>
       </div>
+
+      {canWrite ? (
+        <dialog
+          ref={dialogRef}
+          className="bg-card text-foreground fixed top-1/2 left-1/2 z-50 m-0 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 -translate-y-1/2 rounded-2xl border p-5 shadow-xl backdrop:bg-black/40"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) {
+              closeConfirm();
+            }
+          }}
+          onCancel={(event) => {
+            if (pending) {
+              event.preventDefault();
+            }
+          }}
+        >
+          <h3 className="text-xl font-bold tracking-tight">Quitar bloqueo</h3>
+          <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+            ¿Estás seguro que deseás quitar el bloqueo de {label}? Esta acción no se puede deshacer.
+          </p>
+
+          <form action={formAction} className="mt-4 grid gap-3">
+            <input type="hidden" name="slug" value={slug} />
+            <input type="hidden" name="blockId" value={block.id} />
+
+            {state?.message && !state.ok ? (
+              <p className="text-destructive text-sm">{state.message}</p>
+            ) : null}
+
+            <div className="flex items-center justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                className="h-10 cursor-pointer rounded-xl px-3"
+                disabled={pending}
+                onClick={closeConfirm}
+              >
+                Volver
+              </Button>
+              <Button
+                type="submit"
+                variant="destructive"
+                className="h-10 cursor-pointer rounded-xl px-3 font-semibold"
+                disabled={pending}
+              >
+                {pending ? "Quitando…" : "Sí, quitar"}
+              </Button>
+            </div>
+          </form>
+        </dialog>
+      ) : null}
     </article>
   );
 }

@@ -13,11 +13,14 @@ export type {
 
 export {
   loadProfessionalsPage,
+  loadProfessionalPage,
+  loadProfessionalCreatePage,
   loadServicesPage,
   loadSchedulePage,
+  loadCalendarBlocksPage,
   createProfessionalAction,
-  updateProfessionalAction,
-  setProfessionalServicesAction,
+  saveProfessionalAction,
+  setProfessionalActiveAction,
   createServiceAction,
   updateServiceAction,
   setWeeklyScheduleAction,

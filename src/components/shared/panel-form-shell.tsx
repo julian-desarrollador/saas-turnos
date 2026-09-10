@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
-export function AgendaNuevoShell({
+export function PanelFormShell({
   onBack,
   closeHref,
   title,
@@ -31,13 +31,13 @@ export function AgendaNuevoShell({
   hideContinue?: boolean;
 }) {
   return (
-    <div className="mx-auto flex min-h-[calc(100dvh-8rem)] max-w-md flex-col px-4 pt-4 pb-[calc(7.5rem+env(safe-area-inset-bottom))] md:pb-28">
+    <div className="mx-auto flex min-h-[calc(100dvh-8rem)] w-full max-w-md min-w-0 flex-col overflow-x-hidden px-4 pt-4 pb-[calc(9.5rem+env(safe-area-inset-bottom))]">
       <header className="flex items-center justify-between pb-4">
         <button
           type="button"
           onClick={onBack}
           aria-label="Volver"
-          className="hover:bg-muted -ml-1 flex size-10 items-center justify-center rounded-xl"
+          className="hover:bg-muted -ml-1 flex size-10 cursor-pointer items-center justify-center rounded-xl"
         >
           <ArrowLeft className="size-6" strokeWidth={2} />
         </button>
@@ -51,19 +51,19 @@ export function AgendaNuevoShell({
 
       <section className="pb-4">
         <h1 className="text-3xl leading-tight font-bold tracking-tight sm:text-4xl">{title}</h1>
-        <p className="text-muted-foreground mt-1.5 text-base sm:text-lg">{subtitle}</p>
+        <p className="text-muted-foreground mt-1.5 text-base">{subtitle}</p>
       </section>
 
       {summary ? (
-        <div className="border-border bg-muted/60 -mx-4 mb-2 flex items-center justify-between gap-3 border-y px-4 py-3">
+        <div className="border-border bg-muted/60 -mx-4 mb-2 flex min-w-0 items-center justify-between gap-3 border-y px-4 py-3">
           {summary}
         </div>
       ) : null}
 
-      <main className="flex-1 pt-4">{children}</main>
+      <main className="min-w-0 flex-1 pt-4">{children}</main>
 
       {!hideContinue ? (
-        <div className="border-border bg-background fixed inset-x-0 bottom-[calc(5.5rem+env(safe-area-inset-bottom))] z-30 border-t px-4 pt-3 pb-2 md:bottom-0">
+        <div className="border-border bg-background fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-30 border-t px-4 pt-3 pb-2">
           <div className="mx-auto max-w-md">
             <button
               type="button"

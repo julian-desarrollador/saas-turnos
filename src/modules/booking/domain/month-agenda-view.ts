@@ -1,25 +1,32 @@
 import { blockOverlapsDate, isCancelledOrNoShow } from "./month-grid";
 
-/** Días con actividad visible (turnos no ocultos y/o bloqueos). */
-export function activityDates(
+/** Días con turnos visibles (respeta el chip de canceladas). */
+export function appointmentDotDates(
   appointments: { localDate: string; status: string }[],
-  blocks: { startDate: string; endDate: string }[],
   showCancelled: boolean,
-  dateKeys: string[],
 ): Set<string> {
-  const active = new Set<string>();
+  const dates = new Set<string>();
   for (const appointment of appointments) {
     if (!showCancelled && isCancelledOrNoShow(appointment.status)) {
       continue;
     }
-    active.add(appointment.localDate);
+    dates.add(appointment.localDate);
   }
+  return dates;
+}
+
+/** Días de la grilla que solapan un bloqueo. */
+export function blockDotDates(
+  blocks: { startDate: string; endDate: string }[],
+  dateKeys: string[],
+): Set<string> {
+  const dates = new Set<string>();
   for (const dateKey of dateKeys) {
     if (blocks.some((block) => blockOverlapsDate(block, dateKey))) {
-      active.add(dateKey);
+      dates.add(dateKey);
     }
   }
-  return active;
+  return dates;
 }
 
 export function dayAppointments<

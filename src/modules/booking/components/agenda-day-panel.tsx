@@ -1,10 +1,11 @@
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Lock } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 import type { MonthBlockRecord } from "@/modules/booking/application/ports/availability-repository";
 import type { MonthAppointment } from "@/modules/booking/application/use-cases/list-month-agenda";
 import { AgendaAppointmentCard } from "@/modules/booking/components/agenda-appointment-card";
 import { AgendaBlockCard } from "@/modules/booking/components/agenda-block-card";
+import type { DeferredAgendaKind } from "@/modules/booking/components/use-deferred-agenda-status";
 
 function formatDayHeading(localDate: string): { weekday: string; dayLong: string } {
   const year = Number(localDate.slice(0, 4));
@@ -26,43 +27,33 @@ export function AgendaDayPanel({
   date,
   showCancelled,
   cancelledCount,
-  eventCount,
+  appointmentCount,
+  blockCount,
   appointments,
   blocks,
   canWrite,
   loading = false,
   onToggleCancelled,
+  onDeferStatus,
+  onRemovedBlock,
 }: {
   slug: string;
   date: string;
   showCancelled: boolean;
   cancelledCount: number;
-  eventCount: number;
+  appointmentCount: number;
+  blockCount: number;
   appointments: MonthAppointment[];
   blocks: MonthBlockRecord[];
   canWrite: boolean;
   loading?: boolean;
   onToggleCancelled: () => void;
+  onDeferStatus?: (appointmentId: string, kind: DeferredAgendaKind) => void;
+  onRemovedBlock: (blockId: string) => void;
 }) {
   const { weekday, dayLong } = formatDayHeading(date);
   const cancelledLabel = cancelledCount === 1 ? "Cancelada" : "Canceladas";
-
-  type DayRow =
-    | { kind: "appointment"; sort: string; appointment: MonthAppointment }
-    | { kind: "block"; sort: string; block: MonthBlockRecord };
-
-  const rows: DayRow[] = [
-    ...appointments.map((appointment) => ({
-      kind: "appointment" as const,
-      sort: `${appointment.localTime}-${appointment.id}`,
-      appointment,
-    })),
-    ...blocks.map((block) => ({
-      kind: "block" as const,
-      sort: `${block.startTime ?? "00:00"}-${block.id}`,
-      block,
-    })),
-  ].sort((left, right) => left.sort.localeCompare(right.sort));
+  const empty = appointments.length === 0 && blocks.length === 0;
 
   return (
     <section className="grid gap-4">
@@ -76,7 +67,7 @@ export function AgendaDayPanel({
             type="button"
             onClick={onToggleCancelled}
             className={cn(
-              "flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm transition",
+              "flex cursor-pointer items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm transition",
               showCancelled
                 ? "border-destructive/30 bg-destructive/10 text-destructive"
                 : "border-border bg-card text-muted-foreground hover:bg-muted",
@@ -89,39 +80,69 @@ export function AgendaDayPanel({
           <div className="border-border bg-card text-muted-foreground flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm">
             <CalendarDays className="text-primary size-4" />
             <span className="font-semibold">
-              {eventCount} {eventCount === 1 ? "evento" : "eventos"}
+              {appointmentCount} {appointmentCount === 1 ? "turno" : "turnos"}
             </span>
           </div>
+          {blockCount > 0 ? (
+            <div className="border-border bg-card text-muted-foreground flex items-center gap-1.5 rounded-2xl border px-3 py-2 text-sm">
+              <Lock className="text-primary size-4" strokeWidth={2.2} />
+              <span className="font-semibold">
+                {blockCount} {blockCount === 1 ? "bloqueo" : "bloqueos"}
+              </span>
+            </div>
+          ) : null}
         </div>
       </div>
 
       {loading ? (
         <p className="text-muted-foreground text-sm">Cargando agenda…</p>
-      ) : rows.length === 0 ? (
+      ) : empty ? (
         <p className="text-muted-foreground text-sm">No hay turnos ni bloqueos este día.</p>
       ) : (
-        <ul className="grid gap-3">
-          {rows.map((row) => {
-            if (row.kind === "block") {
-              return (
-                <li key={`block-${row.block.id}`}>
-                  <AgendaBlockCard slug={slug} block={row.block} />
+        <div className="grid gap-5">
+          {appointments.length > 0 ? (
+            <ul className="grid gap-3">
+              {appointments.map((appointment) => (
+                <li key={appointment.id}>
+                  <AgendaAppointmentCard
+                    slug={slug}
+                    date={date}
+                    appointment={appointment}
+                    canWrite={canWrite}
+                    onDeferStatus={
+                      onDeferStatus
+                        ? (kind) => {
+                            onDeferStatus(appointment.id, kind);
+                          }
+                        : undefined
+                    }
+                  />
                 </li>
-              );
-            }
+              ))}
+            </ul>
+          ) : null}
 
-            return (
-              <li key={row.appointment.id}>
-                <AgendaAppointmentCard
-                  slug={slug}
-                  date={date}
-                  appointment={row.appointment}
-                  canWrite={canWrite}
-                />
-              </li>
-            );
-          })}
-        </ul>
+          {blocks.length > 0 ? (
+            <section className={cn("grid gap-2", appointments.length > 0 && "mt-8")}>
+              <h2 className="text-muted-foreground flex items-center gap-1.5 text-base font-semibold">
+                <Lock className="size-4" strokeWidth={2.2} />
+                Bloqueos
+              </h2>
+              <ul className="grid gap-2">
+                {blocks.map((block) => (
+                  <li key={block.id}>
+                    <AgendaBlockCard
+                      slug={slug}
+                      block={block}
+                      canWrite={canWrite}
+                      onRemoved={onRemovedBlock}
+                    />
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+        </div>
       )}
     </section>
   );

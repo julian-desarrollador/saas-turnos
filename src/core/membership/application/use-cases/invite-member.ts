@@ -63,7 +63,7 @@ export function createInviteMember(
         });
       }
 
-      const redirectUrl = `${appBaseUrl.replace(/\/$/, "")}/${tenant.slug}/dashboard`;
+      const redirectUrl = `${appBaseUrl.replace(/\/$/, "")}/${tenant.slug}/agenda`;
       invitation = await clerk.createInvitation({
         organizationId,
         email,

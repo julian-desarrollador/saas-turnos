@@ -271,7 +271,7 @@ async function main() {
 
   console.log("  Weekly schedules: sucursal lun-sáb, Ana con capacidad 2 a la mañana");
 
-  console.log("\nSeed completado. Visita http://localhost:9700/demo/dashboard");
+  console.log("\nSeed completado. Visita http://localhost:9700/demo/agenda");
 }
 
 main()

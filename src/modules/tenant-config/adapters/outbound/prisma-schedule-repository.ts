@@ -1,5 +1,6 @@
 import type { PrismaClient } from "@/generated/prisma/client";
 import type {
+  CalendarBlockRecord,
   CreateCalendarBlockData,
   ScheduleOwner,
   ScheduleRepositories,
@@ -118,27 +119,43 @@ export function createPrismaScheduleRepositories(db: PrismaClient): ScheduleRepo
         return db.calendarBlock.findMany({
           where: { tenantId },
           select: blockSelect,
-          orderBy: [{ startDate: "asc" }, { startTime: "asc" }],
+          orderBy: [
+            { startDate: "asc" },
+            { startTime: "asc" },
+            { endDate: "asc" },
+            { endTime: "asc" },
+            { id: "asc" },
+          ],
         });
       },
-      async create(data: CreateCalendarBlockData) {
+      async createMany(items: CreateCalendarBlockData[]) {
+        const first = items[0];
+        if (!first) {
+          return [];
+        }
         return db.$transaction(async (tx) => {
-          const exists = await ownerExists(tx, data.tenantId, data.owner);
+          const exists = await ownerExists(tx, first.tenantId, first.owner);
           if (!exists) {
             return null;
           }
-          const ownerData = ownerCreateData(data.tenantId, data.owner);
-          return tx.calendarBlock.create({
-            data: {
-              ...ownerData,
-              startDate: data.startDate,
-              endDate: data.endDate,
-              startTime: data.startTime,
-              endTime: data.endTime,
-              reason: data.reason,
-            },
-            select: blockSelect,
-          });
+          const created: CalendarBlockRecord[] = [];
+          for (const data of items) {
+            const ownerData = ownerCreateData(data.tenantId, data.owner);
+            created.push(
+              await tx.calendarBlock.create({
+                data: {
+                  ...ownerData,
+                  startDate: data.startDate,
+                  endDate: data.endDate,
+                  startTime: data.startTime,
+                  endTime: data.endTime,
+                  reason: data.reason,
+                },
+                select: blockSelect,
+              }),
+            );
+          }
+          return created;
         });
       },
       async delete(tenantId, id) {
