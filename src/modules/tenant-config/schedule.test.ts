@@ -4,7 +4,10 @@ import { describe, it } from "node:test";
 import { ForbiddenError } from "@/core/authorization";
 import { createMemorySchedule } from "@/modules/tenant-config/adapters/outbound/memory-schedule-repository";
 import { TenantConfigError } from "@/modules/tenant-config/application/errors";
-import { eachInclusiveDate } from "@/modules/tenant-config/application/schedule-rules";
+import {
+  eachInclusiveDate,
+  calendarBlocksOverlap,
+} from "@/modules/tenant-config/application/schedule-rules";
 import {
   createCreateCalendarBlock,
   createDeleteCalendarBlock,
@@ -187,6 +190,83 @@ describe("eachInclusiveDate", () => {
   });
 });
 
+describe("calendarBlocksOverlap", () => {
+  it("trata dos días completos iguales como solape", () => {
+    assert.equal(
+      calendarBlocksOverlap(
+        { startDate: "2026-09-23", endDate: "2026-09-23", startTime: null, endTime: null },
+        { startDate: "2026-09-23", endDate: "2026-09-23", startTime: null, endTime: null },
+      ),
+      true,
+    );
+  });
+
+  it("un día completo solapa cualquier franja de ese día", () => {
+    assert.equal(
+      calendarBlocksOverlap(
+        { startDate: "2026-09-23", endDate: "2026-09-23", startTime: null, endTime: null },
+        {
+          startDate: "2026-09-23",
+          endDate: "2026-09-23",
+          startTime: "10:00",
+          endTime: "12:00",
+        },
+      ),
+      true,
+    );
+  });
+
+  it("permite franjas consecutivas del mismo día", () => {
+    assert.equal(
+      calendarBlocksOverlap(
+        {
+          startDate: "2026-09-23",
+          endDate: "2026-09-23",
+          startTime: "10:00",
+          endTime: "12:00",
+        },
+        {
+          startDate: "2026-09-23",
+          endDate: "2026-09-23",
+          startTime: "12:00",
+          endTime: "14:00",
+        },
+      ),
+      false,
+    );
+  });
+
+  it("solapa franjas que se pisan", () => {
+    assert.equal(
+      calendarBlocksOverlap(
+        {
+          startDate: "2026-09-23",
+          endDate: "2026-09-23",
+          startTime: "10:00",
+          endTime: "12:00",
+        },
+        {
+          startDate: "2026-09-23",
+          endDate: "2026-09-23",
+          startTime: "11:00",
+          endTime: "13:00",
+        },
+      ),
+      true,
+    );
+  });
+
+  it("no solapa días distintos", () => {
+    assert.equal(
+      calendarBlocksOverlap(
+        { startDate: "2026-09-23", endDate: "2026-09-23", startTime: null, endTime: null },
+        { startDate: "2026-09-24", endDate: "2026-09-24", startTime: null, endTime: null },
+      ),
+      false,
+    );
+  });
+});
+
 describe("calendar blocks", () => {
   it("permite a recepción crear un bloqueo por cada día del rango", async () => {
     const createCalendarBlock = createCreateCalendarBlock(repos());
@@ -213,6 +293,97 @@ describe("calendar blocks", () => {
           block.professionalId === professionalA,
       ),
     );
+  });
+
+  it("rechaza un segundo día completo de la misma agenda", async () => {
+    const createCalendarBlock = createCreateCalendarBlock(repos());
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "branch", id: branchA },
+      startDate: "2026-09-23",
+      endDate: "2026-09-23",
+      startTime: null,
+      endTime: null,
+      reason: null,
+    });
+
+    await assert.rejects(
+      () =>
+        createCalendarBlock({
+          actor: ownerA,
+          owner: { kind: "branch", id: branchA },
+          startDate: "2026-09-23",
+          endDate: "2026-09-23",
+          startTime: null,
+          endTime: null,
+          reason: null,
+        }),
+      (error: unknown) => error instanceof TenantConfigError && error.reason === "BLOCKS_OVERLAP",
+    );
+  });
+
+  it("permite el mismo día en otra agenda y una franja que no se pisa", async () => {
+    const createCalendarBlock = createCreateCalendarBlock(repos());
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "branch", id: branchA },
+      startDate: "2026-09-23",
+      endDate: "2026-09-23",
+      startTime: null,
+      endTime: null,
+      reason: null,
+    });
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-09-23",
+      endDate: "2026-09-23",
+      startTime: "10:00",
+      endTime: "12:00",
+      reason: null,
+    });
+    const afternoon = await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-09-23",
+      endDate: "2026-09-23",
+      startTime: "12:00",
+      endTime: "14:00",
+      reason: null,
+    });
+    assert.equal(afternoon.length, 1);
+  });
+
+  it("no crea el rango si un día ya está bloqueado", async () => {
+    const schedule = repos();
+    const createCalendarBlock = createCreateCalendarBlock(schedule);
+    await createCalendarBlock({
+      actor: ownerA,
+      owner: { kind: "professional", id: professionalA },
+      startDate: "2026-09-24",
+      endDate: "2026-09-24",
+      startTime: null,
+      endTime: null,
+      reason: null,
+    });
+
+    await assert.rejects(
+      () =>
+        createCalendarBlock({
+          actor: ownerA,
+          owner: { kind: "professional", id: professionalA },
+          startDate: "2026-09-23",
+          endDate: "2026-09-24",
+          startTime: null,
+          endTime: null,
+          reason: null,
+        }),
+      (error: unknown) => error instanceof TenantConfigError && error.reason === "BLOCKS_OVERLAP",
+    );
+
+    const remaining = await schedule.blocks.listByTenant(tenantA);
+    assert.equal(remaining.length, 1);
+    assert.equal(remaining[0]?.startDate, "2026-09-24");
   });
 
   it("quitar un día de un rango no borra los demás", async () => {
@@ -296,8 +467,8 @@ describe("calendar blocks", () => {
     await createCalendarBlock({
       actor: ownerA,
       owner: { kind: "professional", id: professionalA },
-      startDate: "2026-09-10",
-      endDate: "2026-09-10",
+      startDate: "2026-09-12",
+      endDate: "2026-09-12",
       startTime: "18:20",
       endTime: "20:20",
       reason: "franja",
@@ -310,8 +481,8 @@ describe("calendar blocks", () => {
       listed.map((block) => ({ date: block.startDate, reason: block.reason })),
       [
         { date: "2026-09-10", reason: "todo el día" },
-        { date: "2026-09-10", reason: "franja" },
         { date: "2026-09-11", reason: "todo el día" },
+        { date: "2026-09-12", reason: "franja" },
         { date: "2026-09-25", reason: "tarde" },
       ],
     );

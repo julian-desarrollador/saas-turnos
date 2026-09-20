@@ -1,4 +1,4 @@
-import { ChevronRight, TriangleAlert } from "lucide-react";
+import { ChevronRight, Lock, TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 
@@ -127,16 +127,13 @@ export default async function SchedulePage({
         )}
       </section>
 
-      <p className="text-muted-foreground text-sm">
-        Para tapar un día o un rato, usá{" "}
-        <Link
-          href={`/${slug}/agenda/bloquear` as Route}
-          className="text-foreground font-semibold underline-offset-4 hover:underline"
-        >
-          Bloquear horario
-        </Link>{" "}
-        en Agenda.
-      </p>
+      <Link
+        href={`/${slug}/agenda/bloquear` as Route}
+        className="border-border bg-card text-foreground flex h-12 items-center justify-center gap-2 rounded-2xl border text-sm font-semibold"
+      >
+        <Lock className="size-5" strokeWidth={2.2} />
+        Bloquear horario
+      </Link>
     </main>
   );
 }

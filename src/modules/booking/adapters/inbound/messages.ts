@@ -22,6 +22,7 @@ const emptySlotsMessages: Record<EmptySlotsReason, string> = {
   NO_PROFESSIONAL_HOURS: "Este profesional no tiene horario para este día. Cargalo en Horarios.",
   NO_BRANCH_HOURS: "La sucursal no tiene horario para este día. Cargalo en Horarios.",
   INACTIVE: "Ese profesional o servicio está inactivo.",
+  BRANCH_BLOCKED: "Hay un bloqueo de la sucursal este día.",
   NONE_FIT: "No hay horarios disponibles para esta combinación.",
 };
 

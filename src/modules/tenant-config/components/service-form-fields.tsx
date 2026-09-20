@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { TimeInput } from "@/components/shared/time-input";
+
 const FIELD_CLASS =
   "border-input focus-visible:border-primary focus-visible:ring-primary/25 h-12 rounded-2xl border bg-transparent px-4 text-base outline-none focus-visible:ring-2";
 
@@ -129,10 +131,9 @@ export function ServiceFormFields({
             <label htmlFor={`${nameId}-earliest`} className="text-sm font-medium">
               No ofrecer este servicio antes de
             </label>
-            <input
+            <TimeInput
               id={`${nameId}-earliest`}
               name="earliestStart"
-              type="time"
               defaultValue={earliestDefault ?? ""}
               className={FIELD_CLASS}
             />
@@ -141,10 +142,9 @@ export function ServiceFormFields({
             <label htmlFor={`${nameId}-latest`} className="text-sm font-medium">
               Ni después de
             </label>
-            <input
+            <TimeInput
               id={`${nameId}-latest`}
               name="latestStart"
-              type="time"
               defaultValue={latestDefault ?? ""}
               className={FIELD_CLASS}
             />

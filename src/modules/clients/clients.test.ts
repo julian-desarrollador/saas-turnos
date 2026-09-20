@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { clientsValidationMessage } from "@/modules/clients/adapters/inbound/messages";
 import { createMemoryClientRepository } from "@/modules/clients/adapters/outbound/memory-client-repository";
 import { ClientsError } from "@/modules/clients/application/errors";
 import type { ClientFicha } from "@/modules/clients/application/ports/client-repository";
@@ -8,6 +9,7 @@ import { CLIENT_QUERY_MAX, parseClientSearch } from "@/modules/clients/applicati
 import { createFindOrCreateClient } from "@/modules/clients/application/use-cases/find-or-create-client";
 import { createGetClientFicha } from "@/modules/clients/application/use-cases/get-client-ficha";
 import { createListClients } from "@/modules/clients/application/use-cases/list-clients";
+import { createUpdateClientFicha } from "@/modules/clients/application/use-cases/update-client-ficha";
 import { normalizePhone, whatsAppChatUrl } from "@/modules/clients/domain/phone";
 
 const tenantA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -307,5 +309,117 @@ describe("getClientFicha", () => {
       () => getClientFicha({ actor: ownerA, clientId: "no-es-uuid" }),
       (error: unknown) => error instanceof ClientsError && error.code === "NOT_FOUND",
     );
+  });
+});
+
+describe("updateClientFicha", () => {
+  it("guarda nombre y teléfono y no toca el apellido", async () => {
+    const repo = createMemoryClientRepository([lucia, marco]);
+    const updateClientFicha = createUpdateClientFicha(repo);
+    const updated = await updateClientFicha({
+      actor: receptionA,
+      clientId: luciaId,
+      phone: "11 5555 4444",
+      firstName: "Luciana",
+    });
+    assert.equal(updated.firstName, "Luciana");
+    assert.equal(updated.lastName, "Pérez");
+    assert.equal(updated.phone, "+5491155554444");
+    assert.equal(updated.notes, "Prefiere la mañana");
+    const previous = await repo.findByPhone(tenantA, "+5491112345678");
+    assert.equal(previous, null);
+  });
+
+  it("permite dejar el nombre vacío y conservar el mismo teléfono", async () => {
+    const repo = createMemoryClientRepository([lucia]);
+    const updateClientFicha = createUpdateClientFicha(repo);
+    const updated = await updateClientFicha({
+      actor: ownerA,
+      clientId: luciaId,
+      phone: "+54 9 11 1234-5678",
+      firstName: "   ",
+    });
+    assert.equal(updated.firstName, null);
+    assert.equal(updated.phone, "+5491112345678");
+    assert.equal(updated.lastName, "Pérez");
+  });
+
+  it("rechaza un teléfono que ya es de otra ficha del tenant", async () => {
+    const updateClientFicha = createUpdateClientFicha(createMemoryClientRepository([lucia, marco]));
+    await assert.rejects(
+      () =>
+        updateClientFicha({
+          actor: ownerA,
+          clientId: luciaId,
+          phone: "1188888888",
+          firstName: "Lucía",
+        }),
+      (error: unknown) =>
+        error instanceof ClientsError &&
+        error.code === "CONFLICT" &&
+        error.reason === "PHONE_TAKEN",
+    );
+  });
+
+  it("no revela una ficha de otro tenant", async () => {
+    const updateClientFicha = createUpdateClientFicha(createMemoryClientRepository([otherTenant]));
+    await assert.rejects(
+      () =>
+        updateClientFicha({
+          actor: ownerA,
+          clientId: otherId,
+          phone: "1112345678",
+          firstName: "Lucía",
+        }),
+      (error: unknown) => error instanceof ClientsError && error.code === "NOT_FOUND",
+    );
+  });
+
+  it("trata un id inválido como inexistente", async () => {
+    const updateClientFicha = createUpdateClientFicha(createMemoryClientRepository([lucia]));
+    await assert.rejects(
+      () =>
+        updateClientFicha({
+          actor: ownerA,
+          clientId: "no-es-uuid",
+          phone: "1112345678",
+          firstName: "Lucía",
+        }),
+      (error: unknown) => error instanceof ClientsError && error.code === "NOT_FOUND",
+    );
+  });
+
+  it("rechaza un teléfono inválido", async () => {
+    const updateClientFicha = createUpdateClientFicha(createMemoryClientRepository([lucia]));
+    await assert.rejects(
+      () =>
+        updateClientFicha({
+          actor: ownerA,
+          clientId: luciaId,
+          phone: "12",
+          firstName: "Lucía",
+        }),
+      (error: unknown) => error instanceof ClientsError && error.reason === "PHONE_INVALID",
+    );
+  });
+
+  it("rechaza un nombre demasiado largo", async () => {
+    const updateClientFicha = createUpdateClientFicha(createMemoryClientRepository([lucia]));
+    await assert.rejects(
+      () =>
+        updateClientFicha({
+          actor: ownerA,
+          clientId: luciaId,
+          phone: "1112345678",
+          firstName: "x".repeat(101),
+        }),
+      (error: unknown) => error instanceof ClientsError && error.reason === "NAME_TOO_LONG",
+    );
+  });
+});
+
+describe("clientsValidationMessage", () => {
+  it("explica el WhatsApp de otra ficha", () => {
+    assert.equal(clientsValidationMessage("PHONE_TAKEN"), "Ese WhatsApp ya es de otro cliente.");
   });
 });

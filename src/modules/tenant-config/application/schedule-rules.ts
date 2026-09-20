@@ -124,6 +124,54 @@ export function assertOptionalBlockTimes(
   return { startTime: start, endTime: end };
 }
 
+const MINUTES_IN_DAY = 24 * 60;
+
+function timeToMinutes(value: string): number {
+  return Number(value.slice(0, 2)) * 60 + Number(value.slice(3, 5));
+}
+
+function blockInterval(
+  startTime: string | null,
+  endTime: string | null,
+): { start: number; end: number } {
+  if (!startTime && !endTime) {
+    return { start: 0, end: MINUTES_IN_DAY };
+  }
+  return {
+    start: timeToMinutes(startTime ?? "00:00"),
+    end: timeToMinutes(endTime ?? "24:00"),
+  };
+}
+
+export type CalendarBlockWindow = {
+  startDate: string;
+  endDate: string;
+  startTime: string | null;
+  endTime: string | null;
+};
+
+export function calendarBlocksOverlap(
+  left: CalendarBlockWindow,
+  right: CalendarBlockWindow,
+): boolean {
+  if (left.startDate > right.endDate || right.startDate > left.endDate) {
+    return false;
+  }
+  const leftInterval = blockInterval(left.startTime, left.endTime);
+  const rightInterval = blockInterval(right.startTime, right.endTime);
+  return leftInterval.start < rightInterval.end && rightInterval.start < leftInterval.end;
+}
+
+export function blockMatchesOwner(
+  block: { branchId: string | null; professionalId: string | null },
+  owner: { kind: "branch" | "professional"; id: string },
+): boolean {
+  if (owner.kind === "branch") {
+    return block.branchId === owner.id && block.professionalId === null;
+  }
+  return block.professionalId === owner.id && block.branchId === null;
+}
+
 export function assertOptionalReason(reason: string | null): string | null {
   if (reason === null) {
     return null;

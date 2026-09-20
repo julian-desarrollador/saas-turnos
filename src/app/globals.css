@@ -127,3 +127,20 @@
     @apply font-sans;
   }
 }
+
+/* El reloj nativo solo abre el menú en el icono; estiramos el hit target a todo el campo. */
+.time-input-hit {
+  position: relative;
+  cursor: pointer;
+}
+
+.time-input-hit::-webkit-calendar-picker-indicator {
+  position: absolute;
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+  cursor: pointer;
+}

@@ -11,6 +11,7 @@ import type { DeferredAgendaKind } from "@/modules/booking/components/use-deferr
 import { isOpenAppointment } from "@/modules/booking/domain/appointment-lifecycle";
 import { isCancelledOrNoShow } from "@/modules/booking/domain/month-grid";
 import { formatDurationLabel } from "@/modules/booking/domain/time";
+import { clientFichaFromAgendaHref } from "@/modules/clients/components/client-ficha-view";
 import { whatsAppChatUrl } from "@/modules/clients/domain/phone";
 
 function WhatsAppIcon({ className }: { className?: string }) {
@@ -132,7 +133,7 @@ export function AgendaAppointmentCard({
 
         {appointment.clientId ? (
           <Link
-            href={`/${slug}/clients/${appointment.clientId}` as Route}
+            href={clientFichaFromAgendaHref(slug, appointment.clientId, date) as Route}
             className="text-primary mt-2 inline-flex items-center gap-1.5 text-[13px] font-medium underline-offset-2 hover:underline"
           >
             <FileText className="size-3.5 shrink-0" strokeWidth={2} />

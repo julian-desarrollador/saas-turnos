@@ -60,4 +60,9 @@ export type ClientRepository = {
     firstName: string | null;
   }): Promise<ClientRecord>;
   fillNameIfEmpty(tenantId: string, id: string, firstName: string): Promise<ClientRecord>;
+  updateIdentity(
+    tenantId: string,
+    id: string,
+    data: { phone: string; firstName: string | null },
+  ): Promise<ClientFicha>;
 };

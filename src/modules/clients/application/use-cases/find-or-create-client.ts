@@ -1,24 +1,9 @@
 import { assertPermission } from "@/core/authorization";
 
 import { normalizePhone } from "../../domain/phone";
+import { assertOptionalClientName } from "../client-name";
 import { ClientsError } from "../errors";
 import type { ClientRecord, ClientRepository, ClientsActor } from "../ports/client-repository";
-
-const NAME_MAX = 100;
-
-function assertOptionalName(value: string | null): string | null {
-  if (value === null) {
-    return null;
-  }
-  const trimmed = value.trim();
-  if (!trimmed) {
-    return null;
-  }
-  if (trimmed.length > NAME_MAX) {
-    throw new ClientsError("VALIDATION", "NAME_TOO_LONG", "firstName");
-  }
-  return trimmed;
-}
 
 export function createFindOrCreateClient(repo: ClientRepository) {
   return async function findOrCreateClient(input: {
@@ -31,7 +16,7 @@ export function createFindOrCreateClient(repo: ClientRepository) {
     if (!phone) {
       throw new ClientsError("VALIDATION", "PHONE_INVALID", "phone");
     }
-    const firstName = assertOptionalName(input.firstName);
+    const firstName = assertOptionalClientName(input.firstName);
 
     const existing = await repo.findByPhone(input.actor.tenantId, phone);
     if (existing) {

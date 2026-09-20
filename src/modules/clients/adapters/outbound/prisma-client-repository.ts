@@ -169,5 +169,26 @@ export function createPrismaClientRepository(db: PrismaClient): ClientRepository
         select: clientListSelect,
       });
     },
+    async updateIdentity(tenantId, id, data) {
+      const existing = await db.client.findFirst({
+        where: { tenantId, id },
+        select: { id: true },
+      });
+      if (!existing) {
+        throw new Error("CLIENT_NOT_FOUND");
+      }
+      try {
+        return await db.client.update({
+          where: { id },
+          data: { phone: data.phone, firstName: data.firstName },
+          select: clientFichaSelect,
+        });
+      } catch (error) {
+        if (isUniqueViolation(error)) {
+          throw new Error("PHONE_TAKEN");
+        }
+        throw error;
+      }
+    },
   };
 }

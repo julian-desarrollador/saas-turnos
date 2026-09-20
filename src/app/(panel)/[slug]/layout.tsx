@@ -1,13 +1,18 @@
 import { UserButton } from "@clerk/nextjs";
+import { notFound } from "next/navigation";
 
 import { hasPermission } from "@/core/authorization";
 import { membershipRoleLabel } from "@/core/membership";
+import { isTenantSlug } from "@/core/tenant-slug";
 import { resolveTenantContext } from "@/server/auth";
 
 import { PanelBottomNav } from "./panel-bottom-nav";
 
 export default async function TenantLayout({ children, params }: LayoutProps<"/[slug]">) {
   const { slug } = await params;
+  if (!isTenantSlug(slug)) {
+    notFound();
+  }
   const ctx = await resolveTenantContext(slug);
   const showMembers = hasPermission(ctx.membership.role, "members.read");
 

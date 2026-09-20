@@ -126,5 +126,18 @@ export function createMemoryClientRepository(
       }
       return toRecord(row);
     },
+    async updateIdentity(tenantId, id, data) {
+      const row = rows.get(id);
+      if (!row || row.tenantId !== tenantId) {
+        throw new Error("CLIENT_NOT_FOUND");
+      }
+      const taken = byPhone(tenantId, data.phone);
+      if (taken && taken.id !== id) {
+        throw new Error("PHONE_TAKEN");
+      }
+      row.phone = data.phone;
+      row.firstName = data.firstName;
+      return { ...row };
+    },
   };
 }

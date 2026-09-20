@@ -27,6 +27,7 @@ export type EmptySlotsReason =
   | "NO_PROFESSIONAL_HOURS"
   | "NO_BRANCH_HOURS"
   | "INACTIVE"
+  | "BRANCH_BLOCKED"
   | "NONE_FIT";
 
 function blockInterval(block: CalendarBlockWindow, localDate: string) {
@@ -76,7 +77,11 @@ export function offeredFromSnapshot(
     professionalBands: bandsForDay(snapshot.professionalBands, dayOfWeek),
     branchBands: bandsForDay(snapshot.branchBands, dayOfWeek),
     blocks,
-    occupations: snapshot.appointments.map((appointment) => {
+    professionalOccupations: snapshot.appointments.map((appointment) => {
+      const start = timeToMinutes(appointment.localTime);
+      return { start, end: start + appointment.durationMinutes };
+    }),
+    branchOccupations: snapshot.branchAppointments.map((appointment) => {
       const start = timeToMinutes(appointment.localTime);
       return { start, end: start + appointment.durationMinutes };
     }),
@@ -131,6 +136,17 @@ export function emptySlotsReason(
     if (!hasFutureStart) {
       return "TODAY_ENDED";
     }
+  }
+
+  const hasFullDayBranchBlock = snapshot.blocks.some((block) => {
+    if (block.owner !== "branch") {
+      return false;
+    }
+    const interval = blockInterval(block, localDate);
+    return interval !== null && interval.start === 0 && interval.end === 24 * 60;
+  });
+  if (hasFullDayBranchBlock) {
+    return "BRANCH_BLOCKED";
   }
 
   return "NONE_FIT";

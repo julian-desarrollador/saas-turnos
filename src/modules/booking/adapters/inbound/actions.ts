@@ -22,6 +22,7 @@ import {
   createListMonthAgenda,
   type MonthAppointment,
 } from "@/modules/booking/application/use-cases/list-month-agenda";
+import { createListRescheduleProfessionals } from "@/modules/booking/application/use-cases/list-reschedule-professionals";
 import type { MonthBlockRecord } from "@/modules/booking/application/ports/availability-repository";
 import { createMarkCompleted } from "@/modules/booking/application/use-cases/mark-completed";
 import { createMarkNoShow } from "@/modules/booking/application/use-cases/mark-no-show";
@@ -53,6 +54,7 @@ export type ActionState = {
 const repo = createPrismaAvailabilityRepository(db);
 const listAgendaCatalog = createListAgendaCatalog(repo);
 const listAvailableSlots = createListAvailableSlots(repo);
+const listRescheduleProfessionals = createListRescheduleProfessionals(repo);
 const listDayAppointments = createListDayAppointments(repo);
 const listMonthAgenda = createListMonthAgenda(repo);
 const createAppointment = createCreateAppointment(repo);
@@ -575,6 +577,60 @@ export async function loadReschedulePage(slug: string, appointmentId: string) {
     canWrite: hasPermission(actor.role, "booking.write"),
     professionals,
   };
+}
+
+export type RescheduleProfessionalsPayload = {
+  professionals: { id: string; displayName: string }[];
+  emptyReason: ReturnType<typeof emptySlotsReason>;
+  branchName: string | null;
+  error?: string;
+};
+
+export async function fetchRescheduleProfessionalsAction(
+  slug: string,
+  appointmentId: string,
+  localDate: string,
+): Promise<RescheduleProfessionalsPayload> {
+  if (!isLocalDate(localDate)) {
+    return { professionals: [], emptyReason: null, branchName: null, error: "Revisá el día." };
+  }
+
+  try {
+    const ctx = await resolveTenantContext(slug);
+    const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
+    const result = await listRescheduleProfessionals({
+      actor,
+      appointmentId,
+      localDate,
+      now: new Date(),
+    });
+    return {
+      professionals: result.professionals,
+      emptyReason: result.emptyReason,
+      branchName: result.branchName,
+    };
+  } catch (caught) {
+    if (caught instanceof ForbiddenError) {
+      throw caught;
+    }
+    if (caught instanceof BookingError && caught.code === "NOT_FOUND") {
+      return {
+        professionals: [],
+        emptyReason: null,
+        branchName: null,
+        error: "No encontramos ese turno.",
+      };
+    }
+    if (caught instanceof BookingError) {
+      return {
+        professionals: [],
+        emptyReason: null,
+        branchName: null,
+        error: validationMessage(caught.reason),
+      };
+    }
+    throw caught;
+  }
 }
 
 export async function fetchRescheduleSlotsAction(

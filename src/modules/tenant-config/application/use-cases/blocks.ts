@@ -12,6 +12,8 @@ import {
   assertDateRange,
   assertOptionalBlockTimes,
   assertOptionalReason,
+  blockMatchesOwner,
+  calendarBlocksOverlap,
   eachInclusiveDate,
 } from "../schedule-rules";
 import { sortCalendarBlocksSoonestFirst } from "../sort-calendar-blocks";
@@ -45,6 +47,17 @@ export function createCreateCalendarBlock(repos: ScheduleRepositories) {
     const times = assertOptionalBlockTimes(input.startTime, input.endTime);
     const reason = assertOptionalReason(input.reason);
     const dates = eachInclusiveDate(startDate, endDate);
+    const proposed = dates.map((date) => ({
+      startDate: date,
+      endDate: date,
+      startTime: times.startTime,
+      endTime: times.endTime,
+    }));
+    const existing = await repos.blocks.listByTenant(input.actor.tenantId);
+    const ownerBlocks = existing.filter((block) => blockMatchesOwner(block, input.owner));
+    if (ownerBlocks.some((block) => proposed.some((next) => calendarBlocksOverlap(block, next)))) {
+      throw new TenantConfigError("VALIDATION", "BLOCKS_OVERLAP", "startDate");
+    }
 
     const created = await repos.blocks.createMany(
       dates.map((date) => ({

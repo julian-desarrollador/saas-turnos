@@ -19,6 +19,7 @@ export type TenantConfigValidationReason =
   | "DATE_INVALID"
   | "DATE_RANGE_INVALID"
   | "BLOCK_TIME_INCOMPLETE"
+  | "BLOCKS_OVERLAP"
   | "REASON_TOO_LONG";
 
 export class TenantConfigError extends Error {

@@ -7,6 +7,7 @@ import type { AvailabilitySnapshot } from "@/modules/booking/application/ports/a
 import { createCancelAppointment } from "@/modules/booking/application/use-cases/cancel-appointment";
 import { createCreateAppointment } from "@/modules/booking/application/use-cases/create-appointment";
 import { createListAvailableSlots } from "@/modules/booking/application/use-cases/list-available-slots";
+import { createListRescheduleProfessionals } from "@/modules/booking/application/use-cases/list-reschedule-professionals";
 import {
   createListDayAppointments,
   occupancyEndTime,
@@ -46,10 +47,35 @@ function snapshot(overrides: Partial<AvailabilitySnapshot> = {}): AvailabilitySn
     },
     professionalBands: [{ dayOfWeek: 2, startTime: "09:00", endTime: "11:30", capacity: 1 }],
     branchBands: [{ dayOfWeek: 2, startTime: "09:00", endTime: "19:00", capacity: 3 }],
+    branchName: "Sede principal",
     blocks: [],
     appointments: [],
+    branchAppointments: [],
     ...overrides,
   };
+}
+
+function teamRepo(branchCapacity = 3) {
+  const base = snapshot({
+    branchBands: [{ dayOfWeek: 2, startTime: "09:00", endTime: "19:00", capacity: branchCapacity }],
+  });
+  const professional = base.professional;
+  if (!professional) {
+    throw new Error("fixture requires a professional");
+  }
+  return createMemoryAvailabilityRepository({
+    snapshot: base,
+    professionals: [
+      professional,
+      {
+        id: professionalB,
+        displayName: "Beto",
+        branchId: "branch",
+        serviceIds: [serviceA],
+        isActive: true,
+      },
+    ],
+  });
 }
 
 describe("occupancyEndTime", () => {
@@ -183,6 +209,56 @@ describe("createAppointment", () => {
         }),
       (error: unknown) => error instanceof BookingError && error.reason === "SLOT_UNAVAILABLE",
     );
+  });
+
+  it("con local de 1, otro profesional no entra a la misma hora y sí a una libre", async () => {
+    const repo = teamRepo(1);
+    const createAppointment = createCreateAppointment(repo);
+    const listAvailableSlots = createListAvailableSlots(repo);
+    await createAppointment({
+      actor,
+      professionalId: professionalA,
+      serviceId: serviceA,
+      clientId: clientA,
+      localDate: "2026-08-25",
+      localTime: "09:00",
+      now: tuesdayMorning,
+    });
+    await assert.rejects(
+      () =>
+        createAppointment({
+          actor,
+          professionalId: professionalB,
+          serviceId: serviceA,
+          clientId: clientA,
+          localDate: "2026-08-25",
+          localTime: "09:00",
+          now: tuesdayMorning,
+        }),
+      (error: unknown) => error instanceof BookingError && error.reason === "SLOT_UNAVAILABLE",
+    );
+
+    const slots = await listAvailableSlots({
+      actor,
+      professionalId: professionalB,
+      serviceId: serviceA,
+      localDate: "2026-08-25",
+      now: tuesdayMorning,
+    });
+    assert.equal(slots.includes("09:00"), false);
+    assert.equal(slots.includes("10:00"), true);
+
+    const later = await createAppointment({
+      actor,
+      professionalId: professionalB,
+      serviceId: serviceA,
+      clientId: clientA,
+      localDate: "2026-08-25",
+      localTime: "10:00",
+      now: tuesdayMorning,
+    });
+    assert.equal(later.professionalId, professionalB);
+    assert.equal(later.localTime, "10:00");
   });
 
   it("rechaza un horario mal formado", async () => {
@@ -484,24 +560,7 @@ describe("markCompleted", () => {
 
 describe("rescheduleAppointment", () => {
   function teamSnapshot() {
-    const base = snapshot();
-    const professional = base.professional;
-    if (!professional) {
-      throw new Error("fixture requires a professional");
-    }
-    return createMemoryAvailabilityRepository({
-      snapshot: base,
-      professionals: [
-        professional,
-        {
-          id: professionalB,
-          displayName: "Beto",
-          branchId: "branch",
-          serviceIds: [serviceA],
-          isActive: true,
-        },
-      ],
-    });
+    return teamRepo();
   }
 
   it("mueve a otro horario del mismo profesional y libera el cupo viejo", async () => {
@@ -714,6 +773,43 @@ describe("rescheduleAppointment", () => {
     );
   });
 
+  it("rechaza reprogramar a un destino que llena el local", async () => {
+    const repo = teamRepo(1);
+    const createAppointment = createCreateAppointment(repo);
+    const rescheduleAppointment = createRescheduleAppointment(repo);
+    const created = await createAppointment({
+      actor,
+      professionalId: professionalA,
+      serviceId: serviceA,
+      clientId: clientA,
+      localDate: "2026-08-25",
+      localTime: "09:00",
+      now: tuesdayMorning,
+    });
+    await createAppointment({
+      actor,
+      professionalId: professionalB,
+      serviceId: serviceA,
+      clientId: clientA,
+      localDate: "2026-08-25",
+      localTime: "10:00",
+      now: tuesdayMorning,
+    });
+
+    await assert.rejects(
+      () =>
+        rescheduleAppointment({
+          actor,
+          appointmentId: created.id,
+          professionalId: professionalA,
+          localDate: "2026-08-25",
+          localTime: "10:00",
+          now: tuesdayMorning,
+        }),
+      (error: unknown) => error instanceof BookingError && error.reason === "SLOT_UNAVAILABLE",
+    );
+  });
+
   it("rechaza un turno no movible", async () => {
     const repo = createMemoryAvailabilityRepository({
       snapshot: snapshot(),
@@ -776,5 +872,107 @@ describe("rescheduleAppointment", () => {
         }),
       (error: unknown) => error instanceof BookingError && error.reason === "NO_CHANGE",
     );
+  });
+});
+
+describe("listRescheduleProfessionals", () => {
+  const appointmentId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaa1";
+  const fullDay = {
+    startDate: "2026-08-25",
+    endDate: "2026-08-25",
+    startTime: null as string | null,
+    endTime: null as string | null,
+    owner: "branch" as const,
+  };
+
+  function teamRepo(options?: {
+    branchBlocks?: AvailabilitySnapshot["blocks"];
+    extraBlocksByProfessionalId?: Record<string, AvailabilitySnapshot["blocks"]>;
+  }) {
+    const base = snapshot({
+      blocks: options?.branchBlocks ?? [],
+    });
+    const professional = base.professional;
+    if (!professional) {
+      throw new Error("fixture requires a professional");
+    }
+    return createMemoryAvailabilityRepository({
+      snapshot: base,
+      extraBlocksByProfessionalId: options?.extraBlocksByProfessionalId,
+      professionals: [
+        professional,
+        {
+          id: professionalB,
+          displayName: "Beto",
+          branchId: "branch",
+          serviceIds: [serviceA],
+          isActive: true,
+        },
+      ],
+      dayAppointments: [
+        {
+          id: appointmentId,
+          tenantId: tenantA,
+          professionalId: professionalA,
+          localDate: "2026-08-18",
+          localTime: "10:00",
+          durationMinutes: 50,
+          status: "CONFIRMED",
+          serviceName: "Corte de dama",
+          serviceId: serviceA,
+          clientFirstName: "Lucía",
+          clientLastName: null,
+          clientPhone: "+5491112345678",
+        },
+      ],
+    });
+  }
+
+  it("no lista a nadie si la sucursal está bloqueada el día completo", async () => {
+    const listRescheduleProfessionals = createListRescheduleProfessionals(
+      teamRepo({ branchBlocks: [fullDay] }),
+    );
+    const result = await listRescheduleProfessionals({
+      actor,
+      appointmentId,
+      localDate: "2026-08-25",
+      now: tuesdayMorning,
+    });
+    assert.deepEqual(result.professionals, []);
+    assert.equal(result.emptyReason, "BRANCH_BLOCKED");
+    assert.equal(result.branchName, "Sede principal");
+  });
+
+  it("lista a quien tiene hueco cuando no hay bloqueo", async () => {
+    const listRescheduleProfessionals = createListRescheduleProfessionals(teamRepo());
+    const result = await listRescheduleProfessionals({
+      actor,
+      appointmentId,
+      localDate: "2026-08-25",
+      now: tuesdayMorning,
+    });
+    assert.deepEqual(
+      result.professionals.map((item) => item.id).sort(),
+      [professionalA, professionalB].sort(),
+    );
+    assert.equal(result.emptyReason, null);
+    assert.equal(result.branchName, null);
+  });
+
+  it("omite a quien está bloqueado y deja a las demás", async () => {
+    const listRescheduleProfessionals = createListRescheduleProfessionals(
+      teamRepo({ extraBlocksByProfessionalId: { [professionalB]: [fullDay] } }),
+    );
+    const result = await listRescheduleProfessionals({
+      actor,
+      appointmentId,
+      localDate: "2026-08-25",
+      now: tuesdayMorning,
+    });
+    assert.deepEqual(
+      result.professionals.map((item) => item.id),
+      [professionalA],
+    );
+    assert.equal(result.emptyReason, null);
   });
 });

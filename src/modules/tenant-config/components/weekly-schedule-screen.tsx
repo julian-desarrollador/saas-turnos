@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
 
 import { PanelFormShell } from "@/components/shared/panel-form-shell";
+import { TimeInput } from "@/components/shared/time-input";
 import { cn } from "@/lib/utils";
 import { setWeeklyScheduleAction } from "@/modules/tenant-config/adapters/inbound/actions";
 import type { WeeklySlotRecord } from "@/modules/tenant-config/application/ports/schedule-repository";
@@ -324,10 +325,9 @@ function TimeField({
       <label htmlFor={id} className="text-sm font-medium">
         {label}
       </label>
-      <input
+      <TimeInput
         id={id}
         name={name}
-        type="time"
         required
         defaultValue={defaultValue}
         className="border-input focus-visible:border-primary focus-visible:ring-primary/25 h-12 rounded-2xl border bg-transparent px-3 text-base outline-none focus-visible:ring-2"

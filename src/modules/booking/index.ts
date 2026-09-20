@@ -5,6 +5,7 @@ export {
   fetchAvailableSlotsAction,
   loadAgendaPage,
   loadReschedulePage,
+  fetchRescheduleProfessionalsAction,
   fetchRescheduleSlotsAction,
   createAppointmentAction,
   cancelAppointmentAction,
@@ -16,4 +17,5 @@ export type {
   ActionState,
   AgendaMonthPayload,
   AvailableSlotsPayload,
+  RescheduleProfessionalsPayload,
 } from "./adapters/inbound/actions";

@@ -42,8 +42,10 @@ function snapshot(): AvailabilitySnapshot {
     },
     professionalBands: [{ dayOfWeek: 1, startTime: "09:00", endTime: "18:00", capacity: 1 }],
     branchBands: [{ dayOfWeek: 1, startTime: "09:00", endTime: "19:00", capacity: 3 }],
+    branchName: "Sede principal",
     blocks: [],
     appointments: [],
+    branchAppointments: [],
   };
 }
 

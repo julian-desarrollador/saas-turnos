@@ -3,8 +3,9 @@
 import { ChevronLeft, FileText, Pencil } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useActionState, useMemo, useState } from "react";
 
+import { saveClientFichaAction } from "@/modules/clients/adapters/inbound/actions";
 import { clientDisplayName } from "@/modules/clients/adapters/inbound/messages";
 import type {
   ClientAppointmentRecord,
@@ -46,8 +47,113 @@ function formatVisitDate(localDate: string): string {
   return `${match[3]}/${match[2]}/${match[1]}`;
 }
 
+const identityInputClassName =
+  "border-input focus-visible:border-primary focus-visible:ring-primary/25 h-12 rounded-2xl border bg-transparent px-4 text-base outline-none focus-visible:ring-2";
+
+function IdentityEditForm({
+  slug,
+  from,
+  date,
+  client,
+  initial,
+  visitsLabel,
+  onCancel,
+}: {
+  slug: string;
+  from?: string;
+  date?: string;
+  client: ClientFicha;
+  initial: string;
+  visitsLabel: string;
+  onCancel: () => void;
+}) {
+  const [draftFirstName, setDraftFirstName] = useState(client.firstName ?? "");
+  const [draftPhone, setDraftPhone] = useState(client.phone);
+  const [saveState, saveAction, savePending] = useActionState(saveClientFichaAction, undefined);
+
+  return (
+    <form action={saveAction} className="grid gap-4">
+      <input type="hidden" name="slug" value={slug} />
+      <input type="hidden" name="clientId" value={client.id} />
+      {from ? <input type="hidden" name="from" value={from} /> : null}
+      {date ? <input type="hidden" name="date" value={date} /> : null}
+
+      <div className="flex items-center gap-3.5">
+        <span
+          aria-hidden
+          className="bg-muted text-foreground flex size-14 shrink-0 items-center justify-center rounded-2xl text-xl font-bold tracking-tight"
+        >
+          {initial}
+        </span>
+        <p className="text-muted-foreground text-[13px]">{visitsLabel}</p>
+      </div>
+
+      <div className="grid gap-2">
+        <label htmlFor="client-first-name" className="text-[14px] font-semibold">
+          Nombre
+        </label>
+        <input
+          id="client-first-name"
+          name="firstName"
+          maxLength={100}
+          autoComplete="given-name"
+          value={draftFirstName}
+          onChange={(event) => setDraftFirstName(event.target.value)}
+          placeholder="Como figura en el turno"
+          className={identityInputClassName}
+        />
+      </div>
+
+      <div className="grid gap-2">
+        <label htmlFor="client-phone" className="text-[14px] font-semibold">
+          Teléfono
+        </label>
+        <input
+          id="client-phone"
+          name="phone"
+          type="tel"
+          required
+          autoComplete="tel"
+          value={draftPhone}
+          onChange={(event) => setDraftPhone(event.target.value)}
+          placeholder="+54 9 11 2345-6789"
+          className={identityInputClassName}
+        />
+      </div>
+
+      {saveState?.message && !saveState.ok ? (
+        <p role="alert" className="text-destructive text-sm font-medium">
+          {saveState.message}
+        </p>
+      ) : null}
+
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={savePending || draftPhone.trim() === ""}
+          className="bg-primary text-primary-foreground flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full text-[15px] font-semibold shadow-sm disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {savePending ? "Guardando…" : "Guardar"}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={savePending}
+          className="border-border bg-card text-foreground flex h-11 flex-1 cursor-pointer items-center justify-center rounded-full border text-[15px] font-medium disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          Cancelar
+        </button>
+      </div>
+    </form>
+  );
+}
+
 export function ClientFichaClient({
   slug,
+  from,
+  date,
+  backHref,
+  backAriaLabel,
   client,
   appointments,
   hasMoreAppointments,
@@ -55,6 +161,10 @@ export function ClientFichaClient({
   canWrite,
 }: {
   slug: string;
+  from?: string;
+  date?: string;
+  backHref: Route;
+  backAriaLabel: string;
   client: ClientFicha;
   appointments: ClientAppointmentRecord[];
   hasMoreAppointments: boolean;
@@ -72,6 +182,7 @@ export function ClientFichaClient({
   const [draftNotes, setDraftNotes] = useState<Record<string, string>>({});
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draftNote, setDraftNote] = useState("");
+  const [editingIdentity, setEditingIdentity] = useState(false);
 
   const visits = useMemo(
     () =>
@@ -113,8 +224,8 @@ export function ClientFichaClient({
         <header className="mb-6">
           <div className="mb-4 flex items-center gap-2.5">
             <Link
-              href={`/${slug}/clients` as Route}
-              aria-label="Volver a clientes"
+              href={backHref}
+              aria-label={backAriaLabel}
               className="border-border bg-card hover:bg-background flex size-10 shrink-0 items-center justify-center rounded-2xl border shadow-sm"
             >
               <ChevronLeft className="size-5" strokeWidth={2} />
@@ -125,36 +236,60 @@ export function ClientFichaClient({
           </div>
 
           <div className="border-border bg-card rounded-[24px] border p-4 shadow-[0_4px_20px_rgba(0,0,0,0.05)]">
-            <div className="flex items-center gap-3.5">
-              <span
-                aria-hidden
-                className="bg-muted text-foreground flex size-14 shrink-0 items-center justify-center rounded-2xl text-xl font-bold tracking-tight"
-              >
-                {initial}
-              </span>
-              <div className="min-w-0 flex-1">
-                <h1 className="truncate text-[20px] leading-tight font-bold tracking-tight">
-                  {name}
-                </h1>
-                <p className="text-muted-foreground mt-1 truncate text-[13px]">
-                  {client.phone}
-                  <span className="text-muted-foreground/50 mx-1.5">·</span>
-                  {visitsLabel}
-                </p>
-              </div>
-            </div>
+            {editingIdentity ? (
+              <IdentityEditForm
+                slug={slug}
+                from={from}
+                date={date}
+                client={client}
+                initial={initial}
+                visitsLabel={visitsLabel}
+                onCancel={() => setEditingIdentity(false)}
+              />
+            ) : (
+              <>
+                <div className="flex items-center gap-3.5">
+                  <span
+                    aria-hidden
+                    className="bg-muted text-foreground flex size-14 shrink-0 items-center justify-center rounded-2xl text-xl font-bold tracking-tight"
+                  >
+                    {initial}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <h1 className="truncate text-[20px] leading-tight font-bold tracking-tight">
+                      {name}
+                    </h1>
+                    <p className="text-muted-foreground mt-1 truncate text-[13px]">
+                      {client.phone}
+                      <span className="text-muted-foreground/50 mx-1.5">·</span>
+                      {visitsLabel}
+                    </p>
+                  </div>
+                  {canWrite ? (
+                    <button
+                      type="button"
+                      onClick={() => setEditingIdentity(true)}
+                      className="border-border bg-card hover:bg-muted inline-flex shrink-0 cursor-pointer items-center gap-1 rounded-xl border px-3 py-2 text-[13px] font-medium shadow-sm"
+                    >
+                      <Pencil className="size-3.5" strokeWidth={2} />
+                      Editar
+                    </button>
+                  ) : null}
+                </div>
 
-            {waUrl ? (
-              <a
-                href={waUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="mt-4 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#128C7E]/25 bg-[#128C7E]/10 text-[14px] font-semibold text-[#128C7E] transition hover:bg-[#128C7E]/15"
-              >
-                <WhatsAppIcon className="size-4" />
-                Enviar WhatsApp
-              </a>
-            ) : null}
+                {waUrl ? (
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-4 flex h-11 w-full cursor-pointer items-center justify-center gap-2 rounded-full border border-[#128C7E]/25 bg-[#128C7E]/10 text-[14px] font-semibold text-[#128C7E] transition hover:bg-[#128C7E]/15"
+                  >
+                    <WhatsAppIcon className="size-4" />
+                    Enviar WhatsApp
+                  </a>
+                ) : null}
+              </>
+            )}
           </div>
         </header>
 

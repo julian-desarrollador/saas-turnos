@@ -26,6 +26,7 @@ const professionalSelect = {
   branchId: true,
   isActive: true,
   services: { select: { serviceId: true } },
+  branch: { select: { name: true } },
 } as const;
 
 const serviceSelect = {
@@ -120,10 +121,12 @@ async function readAvailabilitySnapshot(
     timezone: tenant.timezone,
     professional: professionalRow ? toProfessional(professionalRow) : null,
     service: serviceRow ? toService(serviceRow) : null,
+    branchName: professionalRow?.branch.name ?? null,
     professionalBands: [],
     branchBands: [],
     blocks: [],
     appointments: [],
+    branchAppointments: [],
   };
 
   if (!professionalRow) {
@@ -164,17 +167,19 @@ async function readAvailabilitySnapshot(
         endDate: true,
         startTime: true,
         endTime: true,
+        professionalId: true,
+        branchId: true,
       },
     }),
     db.appointment.findMany({
       where: {
         tenantId,
-        professionalId,
+        branchId,
         localDate,
         status: { notIn: ["CANCELLED", "NO_SHOW"] },
         ...(excludeAppointmentId ? { id: { not: excludeAppointmentId } } : {}),
       },
-      select: { localTime: true, durationMinutes: true },
+      select: { localTime: true, durationMinutes: true, professionalId: true },
     }),
   ]);
 
@@ -194,8 +199,23 @@ async function readAvailabilitySnapshot(
       endTime: row.endTime,
       capacity: row.capacity,
     }));
-  snapshot.blocks = blocks;
-  snapshot.appointments = appointments;
+  snapshot.blocks = blocks.map((row) => ({
+    startDate: row.startDate,
+    endDate: row.endDate,
+    startTime: row.startTime,
+    endTime: row.endTime,
+    owner: row.professionalId ? "professional" : "branch",
+  }));
+  snapshot.appointments = appointments
+    .filter((row) => row.professionalId === professionalId)
+    .map((row) => ({
+      localTime: row.localTime,
+      durationMinutes: row.durationMinutes,
+    }));
+  snapshot.branchAppointments = appointments.map((row) => ({
+    localTime: row.localTime,
+    durationMinutes: row.durationMinutes,
+  }));
   return snapshot;
 }
 
@@ -398,8 +418,13 @@ export function createPrismaAvailabilityRepository(db: PrismaClient): Availabili
     },
     async reserveSlot(input) {
       return db.$transaction(async (tx) => {
+        const professional = await tx.professional.findFirst({
+          where: { tenantId: input.tenantId, id: input.professionalId },
+          select: { branchId: true },
+        });
         await lockProfessionalDays(tx, input.tenantId, [
           `${input.professionalId}:${input.localDate}`,
+          ...(professional ? [`branch:${professional.branchId}:${input.localDate}`] : []),
         ]);
 
         const snapshot = await readAvailabilitySnapshot(
@@ -472,6 +497,7 @@ export function createPrismaAvailabilityRepository(db: PrismaClient): Availabili
           id: true,
           status: true,
           professionalId: true,
+          branchId: true,
           localDate: true,
           localTime: true,
           clientId: true,
@@ -497,9 +523,15 @@ export function createPrismaAvailabilityRepository(db: PrismaClient): Availabili
       }
 
       return db.$transaction(async (tx) => {
+        const destination = await tx.professional.findFirst({
+          where: { tenantId: input.tenantId, id: input.professionalId },
+          select: { branchId: true },
+        });
         await lockProfessionalDays(tx, input.tenantId, [
           `${existing.professionalId}:${existing.localDate}`,
           `${input.professionalId}:${input.localDate}`,
+          `branch:${existing.branchId}:${existing.localDate}`,
+          ...(destination ? [`branch:${destination.branchId}:${input.localDate}`] : []),
         ]);
 
         const locked = await tx.appointment.findFirst({

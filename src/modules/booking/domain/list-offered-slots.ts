@@ -23,7 +23,8 @@ export type ListOfferedSlotsInput = {
   professionalBands: CapacityBand[];
   branchBands: CapacityBand[];
   blocks: MinuteInterval[];
-  occupations: MinuteInterval[];
+  professionalOccupations: MinuteInterval[];
+  branchOccupations: MinuteInterval[];
 };
 
 function toBand(band: CapacityBand): { start: number; end: number; capacity: number } {
@@ -73,7 +74,8 @@ function fitsCapacity(
   end: number,
   professional: { start: number; end: number; capacity: number }[],
   branch: { start: number; end: number; capacity: number }[],
-  occupations: MinuteInterval[],
+  professionalOccupations: MinuteInterval[],
+  branchOccupations: MinuteInterval[],
 ): boolean {
   const points = new Set<number>([start, end]);
   for (const band of [...professional, ...branch]) {
@@ -84,7 +86,7 @@ function fitsCapacity(
       points.add(band.end);
     }
   }
-  for (const occupation of occupations) {
+  for (const occupation of [...professionalOccupations, ...branchOccupations]) {
     if (occupation.start > start && occupation.start < end) {
       points.add(occupation.start);
     }
@@ -102,12 +104,19 @@ function fitsCapacity(
     }
     const professionalCapacity = capacityAt(from, professional);
     const branchCapacity = capacityAt(from, branch);
-    const capacity = Math.min(professionalCapacity, branchCapacity);
-    if (capacity < 1) {
+    if (professionalCapacity < 1 || branchCapacity < 1) {
       return false;
     }
-    const taken = occupations.filter((item) => item.start <= from && item.end > from).length;
-    if (taken + 1 > capacity) {
+    const professionalTaken = professionalOccupations.filter(
+      (item) => item.start <= from && item.end > from,
+    ).length;
+    if (professionalTaken + 1 > professionalCapacity) {
+      return false;
+    }
+    const branchTaken = branchOccupations.filter(
+      (item) => item.start <= from && item.end > from,
+    ).length;
+    if (branchTaken + 1 > branchCapacity) {
       return false;
     }
   }
@@ -160,7 +169,16 @@ export function listOfferedSlots(input: ListOfferedSlotsInput): string[] {
     if (input.blocks.some((block) => overlaps({ start, end }, block))) {
       continue;
     }
-    if (!fitsCapacity(start, end, professional, branch, input.occupations)) {
+    if (
+      !fitsCapacity(
+        start,
+        end,
+        professional,
+        branch,
+        input.professionalOccupations,
+        input.branchOccupations,
+      )
+    ) {
       continue;
     }
     offered.push(minutesToTime(start));

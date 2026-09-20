@@ -6,6 +6,7 @@ import { AgendaCancelForm } from "@/modules/booking/components/agenda-cancel-for
 import { AgendaCompleteForm } from "@/modules/booking/components/agenda-complete-form";
 import { AgendaNoShowForm } from "@/modules/booking/components/agenda-no-show-form";
 import { isOpenAppointment } from "@/modules/booking/domain/appointment-lifecycle";
+import { clientFichaFromAgendaHref } from "@/modules/clients/components/client-ficha-view";
 
 function clientLabel(appointment: DayAppointment): string {
   const name = [appointment.clientFirstName, appointment.clientLastName]
@@ -56,7 +57,7 @@ export function AgendaDayAppointments({
               <p className="text-sm">{appointment.serviceName}</p>
               {appointment.clientId ? (
                 <Link
-                  href={`/${slug}/clients/${appointment.clientId}` as Route}
+                  href={clientFichaFromAgendaHref(slug, appointment.clientId, date) as Route}
                   className="text-muted-foreground text-sm underline-offset-4 hover:underline"
                 >
                   {clientLabel(appointment)}

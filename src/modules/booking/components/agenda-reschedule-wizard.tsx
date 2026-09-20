@@ -8,6 +8,7 @@ import { PanelFormShell } from "@/components/shared/panel-form-shell";
 import { SelectCard } from "@/components/shared/select-card";
 import { cn } from "@/lib/utils";
 import {
+  fetchRescheduleProfessionalsAction,
   fetchRescheduleSlotsAction,
   rescheduleAppointmentAction,
   type ActionState,
@@ -56,6 +57,13 @@ export function AgendaRescheduleWizard({
     ? appointment.professionalId
     : (professionals[0]?.id ?? "");
   const [professionalId, setProfessionalId] = useState(initialProfessionalId);
+  const [availableProfessionals, setAvailableProfessionals] = useState<
+    { id: string; displayName: string }[] | null
+  >(null);
+  const [professionalsError, setProfessionalsError] = useState<string>();
+  const [professionalsPending, startProfessionalsTransition] = useTransition();
+  const [teamEmptyReason, setTeamEmptyReason] = useState<EmptySlotsReason | null>(null);
+  const [teamBranchName, setTeamBranchName] = useState<string | null>(null);
   const [selectedTime, setSelectedTime] = useState("");
   const [slots, setSlots] = useState<string[] | null>(null);
   const [emptyReason, setEmptyReason] = useState<EmptySlotsReason | null>(null);
@@ -68,7 +76,14 @@ export function AgendaRescheduleWizard({
 
   const closeHref = `/${slug}/agenda?date=${encodeURIComponent(appointment.localDate)}` as Route;
   const professional =
-    professionals.find((item) => item.id === professionalId) ?? professionals[0] ?? null;
+    availableProfessionals?.find((item) => item.id === professionalId) ??
+    professionals.find((item) => item.id === professionalId) ??
+    availableProfessionals?.[0] ??
+    professionals[0] ??
+    null;
+  const currentProfessionalAvailable = Boolean(
+    availableProfessionals?.some((item) => item.id === appointment.professionalId),
+  );
   const clientName = rescheduleClientName(appointment);
   const duration = formatDurationLabel(appointment.durationMinutes);
   const { year, month } = monthDateRange(yearMonth);
@@ -77,6 +92,43 @@ export function AgendaRescheduleWizard({
   const newEndTime = selectedTime
     ? minutesToTime(timeToMinutes(selectedTime) + appointment.durationMinutes)
     : "";
+
+  useEffect(() => {
+    if (step !== 2 || !selectedDate) {
+      return;
+    }
+
+    startProfessionalsTransition(async () => {
+      setAvailableProfessionals(null);
+      setProfessionalsError(undefined);
+      setTeamEmptyReason(null);
+      setTeamBranchName(null);
+      try {
+        const payload = await fetchRescheduleProfessionalsAction(
+          slug,
+          appointment.id,
+          selectedDate,
+        );
+        const list = payload.professionals;
+        setAvailableProfessionals(list);
+        setProfessionalsError(payload.error);
+        setTeamEmptyReason(payload.emptyReason);
+        setTeamBranchName(payload.branchName);
+        setProfessionalId((current) => {
+          if (current && list.some((item) => item.id === current)) {
+            return current;
+          }
+          if (list.some((item) => item.id === appointment.professionalId)) {
+            return appointment.professionalId;
+          }
+          return list[0]?.id ?? "";
+        });
+      } catch {
+        setAvailableProfessionals([]);
+        setProfessionalsError("No pudimos cargar quién puede atender este día. Intentá de nuevo.");
+      }
+    });
+  }, [appointment.id, appointment.professionalId, selectedDate, slug, step]);
 
   useEffect(() => {
     if (step !== 3 || !selectedDate || !professionalId) {
@@ -105,6 +157,17 @@ export function AgendaRescheduleWizard({
     });
   }, [appointment.id, professionalId, selectedDate, slug, step]);
 
+  const noAvailableSlots = Boolean(
+    step === 3 && !slotsPending && slots && slots.length === 0 && !slotsError,
+  );
+  const noAvailableProfessionals = Boolean(
+    step === 2 &&
+    !professionalsPending &&
+    availableProfessionals &&
+    availableProfessionals.length === 0 &&
+    !professionalsError,
+  );
+
   function onSelectDate(dateKey: string) {
     if (dateKey < today) {
       return;
@@ -114,6 +177,10 @@ export function AgendaRescheduleWizard({
     setSlots(null);
     setEmptyReason(null);
     setSlotsError(undefined);
+    setAvailableProfessionals(null);
+    setProfessionalsError(undefined);
+    setTeamEmptyReason(null);
+    setTeamBranchName(null);
     const targetMonth = yearMonthFromDate(dateKey);
     if (targetMonth !== yearMonth) {
       setYearMonth(targetMonth);
@@ -139,6 +206,10 @@ export function AgendaRescheduleWizard({
   }
 
   function handleContinue() {
+    if ((step === 2 && noAvailableProfessionals) || (step === 3 && noAvailableSlots)) {
+      setStep(1);
+      return;
+    }
     if (step < 4) {
       setStep((current) => (current + 1) as RescheduleStep);
       return;
@@ -155,7 +226,14 @@ export function AgendaRescheduleWizard({
       : step === 2
         ? {
             title: "¿Quién lo va a atender?",
-            subtitle: `Paso 2 de 4 · Podés mantener a ${appointment.professionalName} o elegir otra persona`,
+            subtitle:
+              professionalsPending || availableProfessionals === null
+                ? "Paso 2 de 4 · Buscando quién puede atender este día"
+                : noAvailableProfessionals
+                  ? "Paso 2 de 4 · Nadie puede atender este día"
+                  : currentProfessionalAvailable
+                    ? `Paso 2 de 4 · Podés mantener a ${appointment.professionalName} o elegir otra persona`
+                    : "Paso 2 de 4 · Solo aparecen quienes tienen un hueco este día",
           }
         : step === 3
           ? {
@@ -179,9 +257,22 @@ export function AgendaRescheduleWizard({
 
   const continueDisabled =
     (step === 1 && !selectedDate) ||
-    (step === 2 && !professionalId) ||
-    (step === 3 && (!selectedTime || slotsPending)) ||
+    (step === 2 &&
+      (professionalsPending ||
+        availableProfessionals === null ||
+        Boolean(professionalsError) ||
+        (!noAvailableProfessionals && !professionalId))) ||
+    (step === 3 && !noAvailableSlots && (!selectedTime || slotsPending)) ||
     (step === 4 && confirmPending);
+
+  const continueLabel =
+    (step === 2 && noAvailableProfessionals) || (step === 3 && noAvailableSlots)
+      ? "Cambiar fecha"
+      : step === 4
+        ? confirmPending
+          ? "Guardando cambio…"
+          : "Confirmar cambio"
+        : "Continuar";
 
   return (
     <PanelFormShell
@@ -190,9 +281,7 @@ export function AgendaRescheduleWizard({
       title={stepMeta.title}
       subtitle={stepMeta.subtitle}
       summary={summary}
-      continueLabel={
-        step === 4 ? (confirmPending ? "Guardando cambio…" : "Confirmar cambio") : "Continuar"
-      }
+      continueLabel={continueLabel}
       onContinue={handleContinue}
       continueDisabled={continueDisabled}
       continueLoading={confirmPending}
@@ -244,22 +333,51 @@ export function AgendaRescheduleWizard({
       ) : null}
 
       {step === 2 ? (
-        <ul className="grid gap-3">
-          {professionals.map((item) => (
-            <li key={item.id}>
-              <SelectCard
-                selected={item.id === professionalId}
-                onClick={() => onSelectProfessional(item.id)}
-                title={item.displayName}
-                subtitle={
-                  item.id === appointment.professionalId
-                    ? "Profesional del turno actual"
-                    : undefined
-                }
-              />
-            </li>
-          ))}
-        </ul>
+        <div className="grid gap-4" aria-live="polite">
+          {professionalsPending || availableProfessionals === null ? (
+            <p className="text-muted-foreground text-base">
+              Buscando quién puede atender este día…
+            </p>
+          ) : null}
+          {professionalsError ? (
+            <p className="text-destructive text-base">{professionalsError}</p>
+          ) : null}
+          {noAvailableProfessionals ? (
+            <div className="bg-muted/60 grid gap-3 rounded-2xl p-4">
+              <p className="text-base font-medium">Este día no hay quién pueda atender.</p>
+              <p className="text-base">
+                {teamEmptyReason === "BRANCH_BLOCKED" && teamBranchName
+                  ? `Hay un bloqueo de ${teamBranchName} este día.`
+                  : "Puede ser un bloqueo del local, que nadie trabaje o que no queden huecos. Cambiá la fecha para seguir."}
+              </p>
+              <button
+                type="button"
+                className="text-primary text-sm font-semibold underline-offset-4 hover:underline"
+                onClick={() => setStep(1)}
+              >
+                Elegir otro día
+              </button>
+            </div>
+          ) : null}
+          {availableProfessionals && availableProfessionals.length > 0 ? (
+            <ul className="grid gap-3">
+              {availableProfessionals.map((item) => (
+                <li key={item.id}>
+                  <SelectCard
+                    selected={item.id === professionalId}
+                    onClick={() => onSelectProfessional(item.id)}
+                    title={item.displayName}
+                    subtitle={
+                      item.id === appointment.professionalId
+                        ? "Profesional del turno actual"
+                        : undefined
+                    }
+                  />
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : null}
 
       {step === 3 ? (
@@ -270,10 +388,8 @@ export function AgendaRescheduleWizard({
           {slotsError ? <p className="text-destructive text-base">{slotsError}</p> : null}
           {!slotsPending && slots && slots.length === 0 && !slotsError ? (
             <div className="bg-muted/60 grid gap-3 rounded-2xl p-4">
-              <p className="font-medium">{emptySlotsMessage(emptyReason)}</p>
-              <p className="text-muted-foreground text-sm">
-                Podés probar con otro día o con otro profesional.
-              </p>
+              <p className="text-base font-medium">{emptySlotsMessage(emptyReason)}</p>
+              <p className="text-base">Podés probar con otro día o con otro profesional.</p>
               <div className="flex flex-wrap gap-3">
                 <button
                   type="button"
@@ -282,7 +398,7 @@ export function AgendaRescheduleWizard({
                 >
                   Elegir otro día
                 </button>
-                {professionals.length > 1 ? (
+                {(availableProfessionals?.length ?? professionals.length) > 1 ? (
                   <button
                     type="button"
                     className="text-primary text-sm font-semibold underline-offset-4 hover:underline"

@@ -6,6 +6,7 @@ import type {
   AppointmentDetail,
   AvailabilityRepository,
   AvailabilitySnapshot,
+  CalendarBlockWindow,
   DayAppointmentRecord,
   MonthAppointmentRecord,
   MonthBlockRecord,
@@ -31,6 +32,7 @@ type StoredDayAppointment = DayAppointmentRecord & {
 export function createMemoryAvailabilityRepository(seed: {
   snapshot: AvailabilitySnapshot;
   professionals?: AgendaProfessional[];
+  extraBlocksByProfessionalId?: Record<string, CalendarBlockWindow[]>;
   appointments?: OccupyingAppointment[];
   monthBlocks?: MonthBlockRecord[];
   dayAppointments?: (Omit<DayAppointmentRecord, "clientId" | "status"> & {
@@ -101,6 +103,26 @@ export function createMemoryAvailabilityRepository(seed: {
     return [];
   }
 
+  function occupyingForBranch(
+    localDate: string,
+    excludeAppointmentId?: string,
+  ): OccupyingAppointment[] {
+    if (dayAppointments.length > 0) {
+      return dayAppointments
+        .filter(
+          (row) =>
+            row.localDate === localDate &&
+            occupiesAgenda(row.storedStatus) &&
+            row.id !== excludeAppointmentId,
+        )
+        .map((row) => ({
+          localTime: row.localTime,
+          durationMinutes: row.durationMinutes,
+        }));
+    }
+    return [...(seed.snapshot.branchAppointments ?? fallbackOccupancy)];
+  }
+
   function snapshotFor(
     professionalId: string,
     serviceId: string,
@@ -116,10 +138,21 @@ export function createMemoryAvailabilityRepository(seed: {
       timezone: seed.snapshot.timezone,
       professional,
       service,
+      branchName: seed.snapshot.branchName,
       professionalBands: seed.snapshot.professionalBands.map((band) => ({ ...band })),
       branchBands: seed.snapshot.branchBands.map((band) => ({ ...band })),
-      blocks: seed.snapshot.blocks.map((block) => ({ ...block })),
+      blocks: [
+        ...seed.snapshot.blocks.map((block) => ({
+          ...block,
+          owner: "branch" as const,
+        })),
+        ...(seed.extraBlocksByProfessionalId?.[professionalId] ?? []).map((block) => ({
+          ...block,
+          owner: "professional" as const,
+        })),
+      ],
       appointments: occupyingFor(professionalId, localDate, excludeAppointmentId),
+      branchAppointments: occupyingForBranch(localDate, excludeAppointmentId),
     };
   }
 

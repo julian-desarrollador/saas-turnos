@@ -37,6 +37,7 @@ export type CalendarBlockWindow = {
   endDate: string;
   startTime: string | null;
   endTime: string | null;
+  owner: "branch" | "professional";
 };
 
 export type OccupyingAppointment = {
@@ -92,10 +93,12 @@ export type AvailabilitySnapshot = {
   timezone: string;
   professional: AgendaProfessional | null;
   service: AgendaService | null;
+  branchName: string | null;
   professionalBands: ScheduleBand[];
   branchBands: ScheduleBand[];
   blocks: CalendarBlockWindow[];
   appointments: OccupyingAppointment[];
+  branchAppointments: OccupyingAppointment[];
 };
 
 export type AppointmentRecord = {

@@ -36,7 +36,8 @@ function weekdayInput(
     professionalBands: [anaMorning, anaAfternoon],
     branchBands: [branchDay],
     blocks: [],
-    occupations: [],
+    professionalOccupations: [],
+    branchOccupations: [],
     ...extra,
   };
 }
@@ -147,21 +148,22 @@ describe("listOfferedSlots", () => {
   });
 
   it("deja entrar un segundo turno a la mañana con capacidad 2", () => {
+    const own = { start: 9 * 60, end: 9 * 60 + 50 };
     const slots = listOfferedSlots(
       weekdayInput({
-        occupations: [{ start: 9 * 60, end: 9 * 60 + 50 }],
+        professionalOccupations: [own],
+        branchOccupations: [own],
       }),
     );
     assert.equal(slots.includes("09:00"), true);
   });
 
   it("agota la capacidad 2 de la mañana", () => {
+    const own = { start: 9 * 60, end: 9 * 60 + 50 };
     const slots = listOfferedSlots(
       weekdayInput({
-        occupations: [
-          { start: 9 * 60, end: 9 * 60 + 50 },
-          { start: 9 * 60, end: 9 * 60 + 50 },
-        ],
+        professionalOccupations: [own, own],
+        branchOccupations: [own, own],
       }),
     );
     assert.equal(slots.includes("09:00"), false);
@@ -169,21 +171,44 @@ describe("listOfferedSlots", () => {
     assert.equal(slots.includes("10:00"), true);
   });
 
-  it("aplica el techo de sucursal cuando es más bajo que el del profesional", () => {
+  it("un turno de otra persona llena el local de capacidad 1", () => {
     const slots = listOfferedSlots(
       weekdayInput({
         branchBands: [{ startTime: "09:00", endTime: "19:00", capacity: 1 }],
-        occupations: [{ start: 9 * 60, end: 9 * 60 + 50 }],
+        branchOccupations: [{ start: 9 * 60, end: 9 * 60 + 50 }],
       }),
     );
     assert.equal(slots.includes("09:00"), false);
     assert.equal(slots.includes("10:00"), true);
   });
 
-  it("rechaza un inicio que cruza a una franja ya llena", () => {
+  it("con local de 3, tres solapados tapan el cuarto y otra hora sigue libre", () => {
+    const chair = { start: 9 * 60, end: 9 * 60 + 50 };
     const slots = listOfferedSlots(
       weekdayInput({
-        occupations: [{ start: 11 * 60 + 30, end: 12 * 60 + 30 }],
+        branchOccupations: [chair, chair, chair],
+      }),
+    );
+    assert.equal(slots.includes("09:00"), false);
+    assert.equal(slots.includes("10:00"), true);
+  });
+
+  it("un turno de otra persona no llena la capacidad del profesional", () => {
+    const slots = listOfferedSlots(
+      weekdayInput({
+        professionalBands: [{ startTime: "09:00", endTime: "18:00", capacity: 1 }],
+        branchOccupations: [{ start: 9 * 60, end: 9 * 60 + 50 }],
+      }),
+    );
+    assert.equal(slots.includes("09:00"), true);
+  });
+
+  it("rechaza un inicio que cruza a una franja ya llena", () => {
+    const own = { start: 11 * 60 + 30, end: 12 * 60 + 30 };
+    const slots = listOfferedSlots(
+      weekdayInput({
+        professionalOccupations: [own],
+        branchOccupations: [own],
       }),
     );
     assert.equal(slots.includes("10:30"), true);
@@ -231,8 +256,10 @@ describe("listAvailableSlots", () => {
             { dayOfWeek: 2, ...anaAfternoon },
           ],
           branchBands: [{ dayOfWeek: 2, ...branchDay }],
+          branchName: "Sede principal",
           blocks: [],
           appointments: [],
+          branchAppointments: [],
         };
       },
       async findAppointment() {
@@ -329,8 +356,10 @@ describe("emptySlotsReason", () => {
       { dayOfWeek: 3, ...anaAfternoon },
     ],
     branchBands: [{ dayOfWeek: 3, ...branchDay }],
+    branchName: "Sede principal",
     blocks: [],
     appointments: [],
+    branchAppointments: [],
   };
 
   it("dice que hoy ya terminó cuando la hora local pasó el fin de la última franja", () => {
@@ -355,6 +384,50 @@ describe("emptySlotsReason", () => {
         new Date("2026-08-26T12:00:00.000Z"),
       ),
       "NO_PROFESSIONAL_HOURS",
+    );
+  });
+
+  it("marca un bloqueo de sucursal de día completo", () => {
+    assert.equal(
+      emptySlotsReason(
+        {
+          ...snapshot,
+          blocks: [
+            {
+              startDate: "2026-08-26",
+              endDate: "2026-08-26",
+              startTime: null,
+              endTime: null,
+              owner: "branch",
+            },
+          ],
+        },
+        "2026-08-26",
+        new Date("2026-08-25T12:00:00.000Z"),
+      ),
+      "BRANCH_BLOCKED",
+    );
+  });
+
+  it("no trata como sucursal un bloqueo de día completo de la persona", () => {
+    assert.equal(
+      emptySlotsReason(
+        {
+          ...snapshot,
+          blocks: [
+            {
+              startDate: "2026-08-26",
+              endDate: "2026-08-26",
+              startTime: null,
+              endTime: null,
+              owner: "professional",
+            },
+          ],
+        },
+        "2026-08-26",
+        new Date("2026-08-25T12:00:00.000Z"),
+      ),
+      "NONE_FIT",
     );
   });
 });

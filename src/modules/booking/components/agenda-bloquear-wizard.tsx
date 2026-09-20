@@ -3,9 +3,10 @@
 import { CalendarDays, Check } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { PanelFormShell } from "@/components/shared/panel-form-shell";
+import { TimeInput } from "@/components/shared/time-input";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
@@ -52,19 +53,6 @@ function formatDisplayDate(localDate: string): string {
     .format(instant)
     .replace(".", "");
   return `${weekday} ${localDate.slice(8, 10)}/${localDate.slice(5, 7)}`;
-}
-
-function closeTimePickerOnComplete(
-  event: ChangeEvent<HTMLInputElement>,
-  taps: { current: number },
-) {
-  if (!/^\d{2}:\d{2}/.test(event.target.value)) {
-    return;
-  }
-  taps.current += 1;
-  if (taps.current >= 2) {
-    event.currentTarget.blur();
-  }
 }
 
 function BlockDateField({
@@ -186,8 +174,6 @@ export function AgendaBloquearWizard({
   const [openField, setOpenField] = useState<DateField | null>(null);
   const [yearMonth, setYearMonth] = useState(currentYearMonth);
   const calendarDialogRef = useRef<HTMLDialogElement>(null);
-  const startTimePickerTaps = useRef(0);
-  const endTimePickerTaps = useRef(0);
   const [allDay, setAllDay] = useState(true);
   const [startTime, setStartTime] = useState("");
   const [endTime, setEndTime] = useState("");
@@ -300,7 +286,16 @@ export function AgendaBloquearWizard({
       return;
     }
     setOpenField(null);
+    if (step === 4) {
+      setConfirmState(undefined);
+    }
     setStep((prev) => (prev - 1) as WizardStep);
+  }
+
+  function goToDatesAfterOverlap() {
+    setConfirmState(undefined);
+    setOpenField(null);
+    setStep(2);
   }
 
   async function submitBlocks() {
@@ -361,7 +356,12 @@ export function AgendaBloquearWizard({
       return;
     }
     if (step === 3 && timesOk) {
+      setConfirmState(undefined);
       setStep(4);
+      return;
+    }
+    if (step === 4 && confirmState && !confirmState.ok) {
+      goToDatesAfterOverlap();
       return;
     }
     if (step === 4) {
@@ -385,14 +385,23 @@ export function AgendaBloquearWizard({
     return { title: "Confirmar bloqueo", subtitle: "Revisá el resumen antes de guardar" };
   })();
 
+  const confirmFailed = Boolean(confirmState && !confirmState.ok);
   const continueDisabled =
     (step === 1 && !hasOwner) ||
     (step === 2 && !datesOk) ||
     (step === 3 && !timesOk) ||
-    (step === 4 && (!canWrite || confirmPending || !hasOwner || !datesOk || !timesOk));
+    (step === 4 &&
+      !confirmFailed &&
+      (!canWrite || confirmPending || !hasOwner || !datesOk || !timesOk));
 
   const continueLabel =
-    step === 4 ? (confirmPending ? "Guardando…" : "Confirmar bloqueo") : "Continuar";
+    step === 4 && confirmFailed
+      ? "Cambiar fechas"
+      : step === 4
+        ? confirmPending
+          ? "Guardando…"
+          : "Confirmar bloqueo"
+        : "Continuar";
 
   const scheduleLabel = allDay
     ? "Todo el día"
@@ -449,7 +458,7 @@ export function AgendaBloquearWizard({
       continueLabel={continueLabel}
       onContinue={handleContinue}
       continueDisabled={continueDisabled}
-      continueLoading={confirmPending && step === 4}
+      continueLoading={confirmPending && step === 4 && !confirmFailed}
     >
       {step === 1 ? (
         <>
@@ -583,36 +592,26 @@ export function AgendaBloquearWizard({
                 <Label htmlFor="block-start-time" className="text-base font-semibold">
                   Hora inicio
                 </Label>
-                <Input
+                <TimeInput
                   id="block-start-time"
-                  type="time"
                   value={startTime}
-                  onFocus={() => {
-                    startTimePickerTaps.current = 0;
-                  }}
                   onChange={(event) => {
                     setStartTime(event.target.value);
-                    closeTimePickerOnComplete(event, startTimePickerTaps);
                   }}
-                  className="h-12 rounded-xl text-base"
+                  className="border-input h-12 rounded-xl border bg-transparent px-3 text-base"
                 />
               </div>
               <div className="grid gap-1.5">
                 <Label htmlFor="block-end-time" className="text-base font-semibold">
                   Hora fin
                 </Label>
-                <Input
+                <TimeInput
                   id="block-end-time"
-                  type="time"
                   value={endTime}
-                  onFocus={() => {
-                    endTimePickerTaps.current = 0;
-                  }}
                   onChange={(event) => {
                     setEndTime(event.target.value);
-                    closeTimePickerOnComplete(event, endTimePickerTaps);
                   }}
-                  className="h-12 rounded-xl text-base"
+                  className="border-input h-12 rounded-xl border bg-transparent px-3 text-base"
                 />
               </div>
             </div>
@@ -650,7 +649,10 @@ export function AgendaBloquearWizard({
           </div>
 
           {confirmState?.message && !confirmState.ok ? (
-            <p className="text-destructive text-sm">{confirmState.message}</p>
+            <div className="grid gap-2" role="alert">
+              <p className="text-destructive text-base font-medium">{confirmState.message}</p>
+              <p className="text-base">Elegí otra fecha o un horario que no se pise.</p>
+            </div>
           ) : null}
         </div>
       ) : null}

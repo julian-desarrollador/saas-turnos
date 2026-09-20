@@ -1,6 +1,14 @@
 "use client";
 
-import { CalendarDays, Ellipsis, Users } from "lucide-react";
+import {
+  CalendarClock,
+  CalendarDays,
+  Ellipsis,
+  Scissors,
+  Shield,
+  Users,
+  UsersRound,
+} from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -19,6 +27,13 @@ import {
 const primaryIcons = {
   agenda: CalendarDays,
   clients: Users,
+} as const;
+
+const moreIcons = {
+  professionals: UsersRound,
+  services: Scissors,
+  schedule: CalendarClock,
+  members: Shield,
 } as const;
 
 export function PanelBottomNav({
@@ -61,21 +76,23 @@ function BottomNavBar({
       {moreOpen ? (
         <div
           id={moreId}
-          className="border-border bg-background fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 border-t px-4 py-3"
+          className="border-border bg-card fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-40 rounded-t-3xl border-t px-4 py-3 shadow-[0_-8px_24px_rgba(0,0,0,0.08)]"
         >
           <nav className="grid gap-1">
             {moreLinks.map((link) => {
               const href = `/${slug}/${link.path}` as Route;
               const active = isPanelLinkActive(pathname, slug, link.path);
+              const Icon = moreIcons[link.path as keyof typeof moreIcons];
               return (
                 <Link
                   key={link.path}
                   href={href}
                   className={cn(
-                    "rounded-lg px-3 py-3 text-sm",
-                    active ? "bg-muted font-medium" : "text-muted-foreground",
+                    "text-foreground flex min-h-14 items-center gap-3 rounded-2xl px-3 text-base font-medium",
+                    active && "bg-muted",
                   )}
                 >
+                  <Icon className="size-5 shrink-0" aria-hidden />
                   {link.label}
                 </Link>
               );

@@ -19,6 +19,7 @@ const validationMessages: Record<TenantConfigValidationReason, string> = {
   DATE_INVALID: "La fecha no es válida.",
   DATE_RANGE_INVALID: "La fecha de inicio no puede ser después de la de fin.",
   BLOCK_TIME_INCOMPLETE: "Si indicás un horario, tenés que completar inicio y fin.",
+  BLOCKS_OVERLAP: "Ya hay un bloqueo que se solapa con esas fechas o ese horario.",
   REASON_TOO_LONG: "El motivo no puede superar 255 caracteres.",
 };
 

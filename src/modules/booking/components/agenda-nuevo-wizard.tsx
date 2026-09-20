@@ -115,6 +115,10 @@ export function AgendaNuevoWizard({
 
   const phoneOk = phone.trim().length >= 8;
   const clientOk = phoneOk;
+  const dateIsBookable = Boolean(selectedDate && selectedDate >= today);
+  const noAvailableSlots = Boolean(
+    step === 4 && !slotsPending && slots && slots.length === 0 && !slotsError,
+  );
 
   useEffect(() => {
     if (step !== 4 || !professionalId || !primaryServiceId || !selectedDate) {
@@ -203,6 +207,10 @@ export function AgendaNuevoWizard({
       setStep(4);
       return;
     }
+    if (step === 4 && noAvailableSlots) {
+      setStep(3);
+      return;
+    }
     if (step === 4 && selectedTime) {
       setStep(5);
       return;
@@ -238,17 +246,22 @@ export function AgendaNuevoWizard({
     return { title: "Confirmar turno", subtitle: "Revisá el resumen antes de guardar" };
   })();
 
-  const dateIsBookable = Boolean(selectedDate && selectedDate >= today);
   const continueDisabled =
     (step === 1 && !professionalId) ||
     (step === 2 && serviceIds.length === 0) ||
     (step === 3 && !dateIsBookable) ||
-    (step === 4 && !selectedTime) ||
+    (step === 4 && !noAvailableSlots && !selectedTime) ||
     (step === 5 && !clientOk) ||
     (step === 6 && (!clientOk || !selectedTime || !dateIsBookable || confirmPending || !canWrite));
 
   const continueLabel =
-    step === 6 ? (confirmPending ? "Confirmando…" : "Confirmar turno") : "Continuar";
+    step === 4 && noAvailableSlots
+      ? "Cambiar fecha"
+      : step === 6
+        ? confirmPending
+          ? "Confirmando…"
+          : "Confirmar turno"
+        : "Continuar";
 
   const summary =
     step === 1 ? (
@@ -384,12 +397,13 @@ export function AgendaNuevoWizard({
           ) : null}
           {slotsError ? <p className="text-destructive text-sm">{slotsError}</p> : null}
           {!slotsPending && slots && slots.length === 0 && !slotsError ? (
-            <div className="grid gap-2">
-              <p className="text-muted-foreground text-sm">{emptySlotsMessage(emptyReason)}</p>
+            <div className="bg-muted/60 grid gap-3 rounded-2xl p-4">
+              <p className="text-base font-medium">{emptySlotsMessage(emptyReason)}</p>
+              <p className="text-base">Cambiá el día, o volvé y elegí otra persona o servicio.</p>
               {emptyReason === "TODAY_ENDED" || emptyReason === "PAST_DATE" ? (
                 <button
                   type="button"
-                  className="text-primary text-left text-sm font-medium underline-offset-4 hover:underline"
+                  className="text-primary text-left text-base font-medium underline-offset-4 hover:underline"
                   onClick={() => {
                     onSelectDate(emptyReason === "PAST_DATE" ? today : addLocalDays(today, 1));
                     setStep(3);
