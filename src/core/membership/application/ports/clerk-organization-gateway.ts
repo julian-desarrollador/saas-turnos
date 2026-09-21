@@ -1,9 +1,5 @@
 export type ClerkOrganizationGateway = {
-  createOrganization(input: {
-    name: string;
-    createdByExternalId: string;
-    slug: string;
-  }): Promise<{ id: string }>;
+  createOrganization(input: { name: string; createdByExternalId: string }): Promise<{ id: string }>;
   ensureOrganizationAdmin(input: { organizationId: string; userExternalId: string }): Promise<void>;
   createInvitation(input: {
     organizationId: string;

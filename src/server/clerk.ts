@@ -31,7 +31,6 @@ export function createClerkOrganizationGateway(): ClerkOrganizationGateway {
         client.organizations.createOrganization({
           name: input.name,
           createdBy: input.createdByExternalId,
-          slug: input.slug,
         }),
       );
       return { id: organization.id };

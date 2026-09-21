@@ -52,7 +52,6 @@ export function createInviteMember(
         const org = await clerk.createOrganization({
           name: tenant.name,
           createdByExternalId: input.actor.externalId,
-          slug: `t-${tenant.id.replaceAll("-", "").slice(0, 16)}`,
         });
         organizationId = org.id;
         await repo.setTenantOrganization(tenant.id, organizationId);

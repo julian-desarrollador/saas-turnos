@@ -29,7 +29,7 @@ const receptionA = {
 
 function emptyClerkCalls() {
   return {
-    organizations: [] as { id: string; name: string; slug: string }[],
+    organizations: [] as { id: string; name: string }[],
     invitations: [] as { id: string; organizationId: string; email: string }[],
   };
 }
