@@ -10,7 +10,11 @@ import { createFindOrCreateClient } from "@/modules/clients/application/use-case
 import { createGetClientFicha } from "@/modules/clients/application/use-cases/get-client-ficha";
 import { createListClients } from "@/modules/clients/application/use-cases/list-clients";
 import { createUpdateClientFicha } from "@/modules/clients/application/use-cases/update-client-ficha";
-import { normalizePhone, whatsAppChatUrl } from "@/modules/clients/domain/phone";
+import {
+  argentinePhoneDigitVariants,
+  normalizePhone,
+  whatsAppChatUrl,
+} from "@/modules/clients/domain/phone";
 
 const tenantA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const tenantB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -75,6 +79,16 @@ describe("normalizePhone", () => {
   });
 });
 
+describe("argentinePhoneDigitVariants", () => {
+  it("agrega el 9 móvil cuando el número viene como 54 + característica", () => {
+    assert.deepEqual(argentinePhoneDigitVariants("54223"), ["54223", "549223"]);
+  });
+
+  it("no duplica el 9 si ya está", () => {
+    assert.deepEqual(argentinePhoneDigitVariants("549223"), ["549223"]);
+  });
+});
+
 describe("whatsAppChatUrl", () => {
   it("arma wa.me con dígitos internacionales sin +", () => {
     assert.equal(whatsAppChatUrl("+54 9 11 1234-5678"), "https://wa.me/5491112345678");
@@ -88,21 +102,32 @@ describe("whatsAppChatUrl", () => {
 describe("parseClientSearch", () => {
   it("separa nombre y teléfono en tokens", () => {
     assert.deepEqual(parseClientSearch("Lucía 1112345678"), [
-      { name: "Lucía", phoneExact: null, phoneContains: null },
-      { name: null, phoneExact: "+5491112345678", phoneContains: null },
+      { name: "Lucía", phoneExact: null, phoneContains: [] },
+      { name: null, phoneExact: "+5491112345678", phoneContains: ["1112345678"] },
     ]);
   });
 
   it("trata un teléfono escrito con espacios como un solo término", () => {
     assert.deepEqual(parseClientSearch("11 1234 5678"), [
-      { name: null, phoneExact: "+5491112345678", phoneContains: null },
+      { name: null, phoneExact: "+5491112345678", phoneContains: ["1112345678"] },
     ]);
   });
 
   it("trata un tramo de dígitos corto como teléfono parcial", () => {
     assert.deepEqual(parseClientSearch("5678"), [
-      { name: null, phoneExact: null, phoneContains: "5678" },
+      { name: null, phoneExact: null, phoneContains: ["5678"] },
     ]);
+  });
+
+  it("busca el celular argentino también sin el 9 móvil", () => {
+    assert.deepEqual(parseClientSearch("+54223"), [
+      { name: null, phoneExact: null, phoneContains: ["54223", "549223"] },
+    ]);
+  });
+
+  it("no filtra con menos de 4 dígitos", () => {
+    assert.deepEqual(parseClientSearch("54"), []);
+    assert.deepEqual(parseClientSearch("+54"), []);
   });
 });
 
@@ -182,6 +207,25 @@ describe("listClients", () => {
     const { clients } = await listClients({ actor: ownerA, query: "11 1234 5678" });
     assert.equal(clients.length, 1);
     assert.equal(clients[0]?.id, luciaId);
+  });
+
+  it("encuentra el celular si se escribe 54 + característica, sin el 9", async () => {
+    const listClients = createListClients(
+      createMemoryClientRepository([
+        ficha({
+          id: luciaId,
+          tenantId: tenantA,
+          phone: "+5492235551234",
+          firstName: "Lucía",
+        }),
+      ]),
+    );
+    const byPrefix = await listClients({ actor: ownerA, query: "+54223" });
+    assert.equal(byPrefix.clients.length, 1);
+    assert.equal(byPrefix.clients[0]?.id, luciaId);
+    const byFull = await listClients({ actor: ownerA, query: "542235551234" });
+    assert.equal(byFull.clients.length, 1);
+    assert.equal(byFull.clients[0]?.id, luciaId);
   });
 
   it("no devuelve la homónima de otro negocio", async () => {

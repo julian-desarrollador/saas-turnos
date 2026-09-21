@@ -1,4 +1,4 @@
-import { normalizePhone } from "../domain/phone";
+import { argentinePhoneDigitVariants, normalizePhone } from "../domain/phone";
 import type { ClientSearchTerm } from "./ports/client-repository";
 
 const LETTER = /[a-zA-ZáéíóúüñÁÉÍÓÚÜÑ]/;
@@ -8,6 +8,18 @@ export const CLIENT_QUERY_MAX = 100;
 export const CLIENT_LIST_LIMIT = 100;
 export const CLIENT_APPOINTMENT_LIMIT = 100;
 
+function phoneTerm(raw: string): ClientSearchTerm | null {
+  const digits = raw.replace(/\D/g, "");
+  const phoneContains = argentinePhoneDigitVariants(digits).filter(
+    (needle) => needle.length >= PHONE_CONTAINS_MIN_DIGITS,
+  );
+  const phoneExact = normalizePhone(raw);
+  if (!phoneExact && phoneContains.length === 0) {
+    return null;
+  }
+  return { name: null, phoneExact, phoneContains };
+}
+
 export function parseClientSearch(raw: string): ClientSearchTerm[] {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -15,29 +27,19 @@ export function parseClientSearch(raw: string): ClientSearchTerm[] {
   }
 
   if (!LETTER.test(trimmed)) {
-    const phoneExact = normalizePhone(trimmed);
-    if (phoneExact) {
-      return [{ name: null, phoneExact, phoneContains: null }];
-    }
-    const digits = trimmed.replace(/\D/g, "");
-    if (digits.length >= PHONE_CONTAINS_MIN_DIGITS) {
-      return [{ name: null, phoneExact: null, phoneContains: digits }];
-    }
+    const term = phoneTerm(trimmed);
+    return term ? [term] : [];
   }
 
   return trimmed.split(/\s+/).map((token): ClientSearchTerm => {
-    const phoneExact = normalizePhone(token);
-    if (phoneExact) {
-      return { name: null, phoneExact, phoneContains: null };
+    if (!LETTER.test(token)) {
+      const phone = phoneTerm(token);
+      if (phone) {
+        return phone;
+      }
     }
 
-    const digits = token.replace(/\D/g, "");
-    const phoneContains = digits.length >= PHONE_CONTAINS_MIN_DIGITS ? digits : null;
-    if (phoneContains && !LETTER.test(token)) {
-      return { name: null, phoneExact: null, phoneContains };
-    }
-
-    return { name: token, phoneExact: null, phoneContains };
+    return { name: token, phoneExact: null, phoneContains: [] };
   });
 }
 
@@ -59,7 +61,7 @@ function termMatches(
   if (term.phoneExact && client.phone === term.phoneExact) {
     return true;
   }
-  if (term.phoneContains && client.phone.includes(term.phoneContains)) {
+  if (term.phoneContains.some((needle) => client.phone.includes(needle))) {
     return true;
   }
   if (term.name && includesInsensitive(client.firstName, term.name)) {

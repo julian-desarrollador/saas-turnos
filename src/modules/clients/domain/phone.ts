@@ -25,6 +25,20 @@ export function normalizePhone(raw: string): string | null {
   return E164.test(candidate) ? candidate : null;
 }
 
+/**
+ * El celular argentino se guarda con el 9 móvil (`549…`).
+ * Quien busca `54` + característica, sin ese 9, tiene que encontrar la misma ficha.
+ */
+export function argentinePhoneDigitVariants(digits: string): string[] {
+  if (!digits) {
+    return [];
+  }
+  if (digits.startsWith("54") && !digits.startsWith("549")) {
+    return [digits, `549${digits.slice(2)}`];
+  }
+  return [digits];
+}
+
 /** URL de chat en WhatsApp (wa.me) a partir de un teléfono crudo o E.164. */
 export function whatsAppChatUrl(raw: string): string | null {
   const phone = normalizePhone(raw);

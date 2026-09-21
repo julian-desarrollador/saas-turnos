@@ -53,8 +53,8 @@ function termWhere(term: ClientSearchTerm) {
   if (term.phoneExact) {
     or.push({ phone: term.phoneExact });
   }
-  if (term.phoneContains) {
-    or.push({ phone: { contains: term.phoneContains } });
+  for (const needle of term.phoneContains) {
+    or.push({ phone: { contains: needle } });
   }
   return { OR: or };
 }

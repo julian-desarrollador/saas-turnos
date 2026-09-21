@@ -35,7 +35,7 @@ export type ClientAppointmentRecord = {
 export type ClientSearchTerm = {
   name: string | null;
   phoneExact: string | null;
-  phoneContains: string | null;
+  phoneContains: string[];
 };
 
 export type ClientVisitSummary = {
