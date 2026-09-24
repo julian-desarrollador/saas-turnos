@@ -81,15 +81,6 @@ function removeDraft(current: SlotDraft[], draftId: string): SlotDraft[] {
   return current.filter((draft) => draft.id !== draftId);
 }
 
-function formatReadOnlyDay(slots: WeeklySlotRecord[]): string {
-  if (slots.length === 0) {
-    return "Cerrado";
-  }
-  return slots
-    .map((slot) => `${slot.startTime}–${slot.endTime} · ${slot.capacity} a la vez`)
-    .join(" · ");
-}
-
 export function WeeklyScheduleScreen({
   slug,
   ownerKind,
@@ -193,8 +184,19 @@ export function WeeklyScheduleScreen({
             const daySlots = slotsForDay(slots, weekday.day);
             return (
               <div key={weekday.day} className="border-border rounded-2xl border px-4 py-4">
-                <p className="text-base font-semibold">{weekday.label}</p>
-                <p className="text-muted-foreground mt-1 text-sm">{formatReadOnlyDay(daySlots)}</p>
+                <p className="text-lg font-semibold">{weekday.label}</p>
+                {daySlots.length === 0 ? (
+                  <p className="mt-1.5 text-lg leading-snug">Cerrado</p>
+                ) : (
+                  <ul className="mt-1.5 grid gap-1">
+                    {daySlots.map((slot) => (
+                      <li key={slot.id} className="text-lg leading-snug tabular-nums">
+                        {slot.startTime}–{slot.endTime}
+                        <span className="text-muted-foreground"> · {slot.capacity} a la vez</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
               </div>
             );
           })}
@@ -228,7 +230,7 @@ function DayCard({
   return (
     <div className="border-border rounded-2xl border px-4 py-4">
       <div className="flex items-center justify-between gap-3">
-        <p className="text-base font-semibold">{weekday.label}</p>
+        <p className="text-lg font-semibold">{weekday.label}</p>
         <button
           type="button"
           onClick={() => {
@@ -303,7 +305,7 @@ function DayCard({
           ) : null}
         </div>
       ) : (
-        <p className="text-muted-foreground mt-2 text-sm">Ese día no se ofrecen turnos.</p>
+        <p className="text-muted-foreground mt-2 text-base">Ese día no se ofrecen turnos.</p>
       )}
     </div>
   );

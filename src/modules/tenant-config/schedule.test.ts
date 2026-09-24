@@ -13,7 +13,10 @@ import {
   createDeleteCalendarBlock,
   createListCalendarBlocks,
 } from "@/modules/tenant-config/application/use-cases/blocks";
-import { createSetWeeklySchedule } from "@/modules/tenant-config/application/use-cases/schedules";
+import {
+  createListWeeklySlots,
+  createSetWeeklySchedule,
+} from "@/modules/tenant-config/application/use-cases/schedules";
 
 const tenantA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const tenantB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -115,6 +118,30 @@ describe("setWeeklySchedule", () => {
       id: professionalB,
     });
     assert.equal(leaked?.length, 0);
+  });
+
+  it("no lista horarios de otro negocio", async () => {
+    const schedule = createMemorySchedule({
+      branches: [{ id: branchA, tenantId: tenantA }],
+      professionals: [
+        { id: professionalA, tenantId: tenantA },
+        { id: professionalB, tenantId: tenantB },
+      ],
+      slots: [
+        {
+          id: "77777777-7777-7777-7777-777777777777",
+          tenantId: tenantB,
+          branchId: null,
+          professionalId: professionalB,
+          dayOfWeek: 1,
+          startTime: "09:00",
+          endTime: "18:00",
+          capacity: 1,
+        },
+      ],
+    });
+    const listed = await createListWeeklySlots(schedule)(ownerA);
+    assert.deepEqual(listed, []);
   });
 
   it("acepta tres franjas del mismo día que no se solapan", async () => {
@@ -439,6 +466,41 @@ describe("calendar blocks", () => {
 
     const remaining = await schedule.blocks.listByTenant(tenantB);
     assert.equal(remaining.length, 1);
+  });
+
+  it("no crea un bloqueo sobre un profesional de otro negocio", async () => {
+    const schedule = repos();
+    const createCalendarBlock = createCreateCalendarBlock(schedule);
+    await assert.rejects(
+      () =>
+        createCalendarBlock({
+          actor: ownerA,
+          owner: { kind: "professional", id: professionalB },
+          startDate: "2026-01-02",
+          endDate: "2026-01-02",
+          startTime: null,
+          endTime: null,
+          reason: null,
+        }),
+      (error: unknown) => error instanceof TenantConfigError && error.code === "NOT_FOUND",
+    );
+    assert.equal((await schedule.blocks.listByTenant(tenantB)).length, 0);
+  });
+
+  it("no lista bloqueos de otro negocio", async () => {
+    const schedule = repos();
+    const created = await createCreateCalendarBlock(schedule)({
+      actor: { tenantId: tenantB, role: "OWNER" },
+      owner: { kind: "professional", id: professionalB },
+      startDate: "2026-01-03",
+      endDate: "2026-01-03",
+      startTime: null,
+      endTime: null,
+      reason: null,
+    });
+    assert.equal(created.length, 1);
+    const listed = await createListCalendarBlocks(schedule)(ownerA);
+    assert.deepEqual(listed, []);
   });
 
   it("lista los bloqueos más próximos primero", async () => {

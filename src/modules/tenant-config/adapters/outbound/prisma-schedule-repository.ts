@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import type { TenantDb, TenantTx } from "@/server/tenant-db";
 import type {
   CalendarBlockRecord,
   CreateCalendarBlockData,
@@ -7,7 +8,7 @@ import type {
   WeeklySlotInput,
 } from "@/modules/tenant-config/application/ports/schedule-repository";
 
-type DbClient = Pick<PrismaClient, "branch" | "professional">;
+type DbClient = Pick<TenantTx, "branch" | "professional">;
 
 const weeklySelect = {
   id: true,
@@ -61,29 +62,36 @@ async function ownerExists(db: DbClient, tenantId: string, owner: ScheduleOwner)
   return professional !== null;
 }
 
-export function createPrismaScheduleRepositories(db: PrismaClient): ScheduleRepositories {
+export function createPrismaScheduleRepositories(
+  _db: PrismaClient,
+  tenantDb: TenantDb,
+): ScheduleRepositories {
   return {
     weekly: {
       async listByTenant(tenantId) {
-        return db.weeklySchedule.findMany({
-          where: { tenantId },
-          select: weeklySelect,
-          orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
-        });
+        return tenantDb.run(tenantId, (tx) =>
+          tx.weeklySchedule.findMany({
+            where: { tenantId },
+            select: weeklySelect,
+            orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+          }),
+        );
       },
       async listByOwner(tenantId, owner) {
-        const exists = await ownerExists(db, tenantId, owner);
-        if (!exists) {
-          return null;
-        }
-        return db.weeklySchedule.findMany({
-          where: ownerWhere(tenantId, owner),
-          select: weeklySelect,
-          orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+        return tenantDb.run(tenantId, async (tx) => {
+          const exists = await ownerExists(tx, tenantId, owner);
+          if (!exists) {
+            return null;
+          }
+          return tx.weeklySchedule.findMany({
+            where: ownerWhere(tenantId, owner),
+            select: weeklySelect,
+            orderBy: [{ dayOfWeek: "asc" }, { startTime: "asc" }],
+          });
         });
       },
       async replaceByOwner(tenantId, owner, slots: WeeklySlotInput[]) {
-        return db.$transaction(async (tx) => {
+        return tenantDb.run(tenantId, async (tx) => {
           const exists = await ownerExists(tx, tenantId, owner);
           if (!exists) {
             return null;
@@ -116,24 +124,26 @@ export function createPrismaScheduleRepositories(db: PrismaClient): ScheduleRepo
     },
     blocks: {
       async listByTenant(tenantId) {
-        return db.calendarBlock.findMany({
-          where: { tenantId },
-          select: blockSelect,
-          orderBy: [
-            { startDate: "asc" },
-            { startTime: "asc" },
-            { endDate: "asc" },
-            { endTime: "asc" },
-            { id: "asc" },
-          ],
-        });
+        return tenantDb.run(tenantId, (tx) =>
+          tx.calendarBlock.findMany({
+            where: { tenantId },
+            select: blockSelect,
+            orderBy: [
+              { startDate: "asc" },
+              { startTime: "asc" },
+              { endDate: "asc" },
+              { endTime: "asc" },
+              { id: "asc" },
+            ],
+          }),
+        );
       },
       async createMany(items: CreateCalendarBlockData[]) {
         const first = items[0];
         if (!first) {
           return [];
         }
-        return db.$transaction(async (tx) => {
+        return tenantDb.run(first.tenantId, async (tx) => {
           const exists = await ownerExists(tx, first.tenantId, first.owner);
           if (!exists) {
             return null;
@@ -159,7 +169,7 @@ export function createPrismaScheduleRepositories(db: PrismaClient): ScheduleRepo
         });
       },
       async delete(tenantId, id) {
-        return db.$transaction(async (tx) => {
+        return tenantDb.run(tenantId, async (tx) => {
           const existing = await tx.calendarBlock.findFirst({
             where: { tenantId, id },
             select: { id: true },

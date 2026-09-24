@@ -16,7 +16,7 @@ import {
 import { clientEnv } from "@/lib/env/client";
 import { resolveTenantContext, type TenantContext } from "@/server/auth";
 import { createClerkOrganizationGateway } from "@/server/clerk";
-import { db } from "@/server/db";
+import { db, tenantDb } from "@/server/db";
 
 export type ActionState = {
   ok: boolean;
@@ -24,7 +24,7 @@ export type ActionState = {
 };
 
 function membershipApp() {
-  const repo = createPrismaMembershipRepository(db);
+  const repo = createPrismaMembershipRepository(db, tenantDb);
   const clerk = createClerkOrganizationGateway();
   return {
     listMembers: createListMembers(repo),

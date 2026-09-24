@@ -81,13 +81,21 @@ export function createMemoryAvailabilityRepository(seed: {
       : [];
   }
 
+  function belongsToTenant(rowTenantId: string, tenantId: string): boolean {
+    return rowTenantId === "" || rowTenantId === tenantId;
+  }
+
   function occupyingFor(
+    tenantId: string,
     professionalId: string,
     localDate: string,
     excludeAppointmentId?: string,
   ): OccupyingAppointment[] {
     const matchingDay = dayAppointments.filter(
-      (row) => row.professionalId === professionalId && row.localDate === localDate,
+      (row) =>
+        belongsToTenant(row.tenantId, tenantId) &&
+        row.professionalId === professionalId &&
+        row.localDate === localDate,
     );
     if (matchingDay.length > 0 || dayAppointments.length > 0) {
       return matchingDay
@@ -104,6 +112,7 @@ export function createMemoryAvailabilityRepository(seed: {
   }
 
   function occupyingForBranch(
+    tenantId: string,
     localDate: string,
     excludeAppointmentId?: string,
   ): OccupyingAppointment[] {
@@ -111,6 +120,7 @@ export function createMemoryAvailabilityRepository(seed: {
       return dayAppointments
         .filter(
           (row) =>
+            belongsToTenant(row.tenantId, tenantId) &&
             row.localDate === localDate &&
             occupiesAgenda(row.storedStatus) &&
             row.id !== excludeAppointmentId,
@@ -124,6 +134,7 @@ export function createMemoryAvailabilityRepository(seed: {
   }
 
   function snapshotFor(
+    tenantId: string,
     professionalId: string,
     serviceId: string,
     localDate: string,
@@ -151,8 +162,8 @@ export function createMemoryAvailabilityRepository(seed: {
           owner: "professional" as const,
         })),
       ],
-      appointments: occupyingFor(professionalId, localDate, excludeAppointmentId),
-      branchAppointments: occupyingForBranch(localDate, excludeAppointmentId),
+      appointments: occupyingFor(tenantId, professionalId, localDate, excludeAppointmentId),
+      branchAppointments: occupyingForBranch(tenantId, localDate, excludeAppointmentId),
     };
   }
 
@@ -186,8 +197,8 @@ export function createMemoryAvailabilityRepository(seed: {
     async listServices() {
       return seed.snapshot.service ? [{ ...seed.snapshot.service }] : [];
     },
-    async loadSnapshot(_tenantId, professionalId, serviceId, localDate, excludeAppointmentId) {
-      return snapshotFor(professionalId, serviceId, localDate, excludeAppointmentId);
+    async loadSnapshot(tenantId, professionalId, serviceId, localDate, excludeAppointmentId) {
+      return snapshotFor(tenantId, professionalId, serviceId, localDate, excludeAppointmentId);
     },
     async findAppointment(tenantId, appointmentId) {
       const row = dayAppointments.find((item) => item.id === appointmentId);
@@ -268,7 +279,7 @@ export function createMemoryAvailabilityRepository(seed: {
     },
     async reserveSlot(input) {
       const evaluation = evaluateReservation(
-        snapshotFor(input.professionalId, input.serviceId, input.localDate),
+        snapshotFor(input.tenantId, input.professionalId, input.serviceId, input.localDate),
         input.localDate,
         input.localTime,
         input.now,
@@ -329,7 +340,7 @@ export function createMemoryAvailabilityRepository(seed: {
       }
 
       const evaluation = evaluateReservation(
-        snapshotFor(input.professionalId, row.serviceId, input.localDate, row.id),
+        snapshotFor(input.tenantId, input.professionalId, row.serviceId, input.localDate, row.id),
         input.localDate,
         input.localTime,
         input.now,

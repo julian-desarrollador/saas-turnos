@@ -9,10 +9,10 @@ config({ path: ".env.local" });
 
 const CLERK_USER_ID = process.env["CLERK_DEV_USER_ID"];
 const CLERK_SECRET_KEY = process.env["CLERK_SECRET_KEY"];
-const DATABASE_URL = process.env["DATABASE_URL"];
+const DATABASE_URL = process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"];
 
 if (!DATABASE_URL) {
-  console.error("Falta DATABASE_URL en .env.local.");
+  console.error("Falta DIRECT_URL en .env.local (rol dueño, para el seed).");
   process.exit(1);
 }
 
@@ -169,8 +169,8 @@ async function main() {
 
   await db.professionalService.createMany({
     data: [
-      { professionalId: professional.id, serviceId: corte.id },
-      { professionalId: professional.id, serviceId: coloracion.id },
+      { tenantId: tenant.id, professionalId: professional.id, serviceId: corte.id },
+      { tenantId: tenant.id, professionalId: professional.id, serviceId: coloracion.id },
     ],
     skipDuplicates: true,
   });

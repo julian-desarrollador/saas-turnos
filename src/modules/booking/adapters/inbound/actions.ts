@@ -42,7 +42,7 @@ import {
   createPrismaClientRepository,
 } from "@/modules/clients";
 import { resolveTenantContext } from "@/server/auth";
-import { db } from "@/server/db";
+import { db, tenantDb } from "@/server/db";
 
 import { validationMessage } from "./messages";
 
@@ -51,7 +51,7 @@ export type ActionState = {
   message?: string;
 };
 
-const repo = createPrismaAvailabilityRepository(db);
+const repo = createPrismaAvailabilityRepository(db, tenantDb);
 const listAgendaCatalog = createListAgendaCatalog(repo);
 const listAvailableSlots = createListAvailableSlots(repo);
 const listRescheduleProfessionals = createListRescheduleProfessionals(repo);
@@ -63,7 +63,7 @@ const getAppointment = createGetAppointment(repo);
 const cancelAppointment = createCancelAppointment(repo);
 const markNoShow = createMarkNoShow(repo);
 const markCompleted = createMarkCompleted(repo);
-const findOrCreateClient = createFindOrCreateClient(createPrismaClientRepository(db));
+const findOrCreateClient = createFindOrCreateClient(createPrismaClientRepository(db, tenantDb));
 
 function readQueryValue(value: string | string[] | undefined): string {
   if (typeof value === "string") {

@@ -46,6 +46,7 @@ export type MembershipRepository = {
   listPendingInvites(tenantId: string): Promise<MembershipInviteRecord[]>;
   findPendingInviteByEmail(tenantId: string, email: string): Promise<MembershipInviteRecord | null>;
   findPendingInviteByClerkInvitationId(
+    tenantId: string,
     clerkInvitationId: string,
   ): Promise<MembershipInviteRecord | null>;
   findMemberByEmail(tenantId: string, email: string): Promise<MemberRecord | null>;
@@ -66,7 +67,7 @@ export type MembershipRepository = {
     invitedByUserId: string;
     clerkInvitationId: string;
   }): Promise<MembershipInviteRecord>;
-  markInviteAccepted(inviteId: string): Promise<void>;
+  markInviteAccepted(tenantId: string, inviteId: string): Promise<void>;
   createMembership(data: {
     tenantId: string;
     userId: string;

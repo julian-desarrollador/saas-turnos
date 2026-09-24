@@ -33,7 +33,7 @@ import {
   createUpdateService,
 } from "@/modules/tenant-config/application/use-cases/services";
 import { resolveTenantContext } from "@/server/auth";
-import { db } from "@/server/db";
+import { db, tenantDb } from "@/server/db";
 
 import { validationMessage } from "./messages";
 
@@ -42,8 +42,8 @@ export type ActionState = {
   message?: string;
 };
 
-const catalogRepos = createPrismaCatalogRepositories(db);
-const scheduleRepos = createPrismaScheduleRepositories(db);
+const catalogRepos = createPrismaCatalogRepositories(db, tenantDb);
+const scheduleRepos = createPrismaScheduleRepositories(db, tenantDb);
 
 const listBranches = createListBranches(catalogRepos);
 const listProfessionals = createListProfessionals(catalogRepos);

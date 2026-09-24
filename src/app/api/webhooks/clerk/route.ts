@@ -7,7 +7,7 @@ import { createPrismaMembershipRepository } from "@/core/membership/adapters/out
 import { normalizeEmail } from "@/core/membership/application/email";
 import { createActivateMembershipFromOrgEvent } from "@/core/membership/application/use-cases/activate-membership";
 import { serverEnv } from "@/lib/env/server";
-import { db } from "@/server/db";
+import { db, tenantDb } from "@/server/db";
 
 export async function POST(req: Request) {
   const headerPayload = await headers();
@@ -143,6 +143,8 @@ async function activateFromOrgEvent(input: {
   email: string;
   clerkInvitationId?: string | null;
 }) {
-  const activate = createActivateMembershipFromOrgEvent(createPrismaMembershipRepository(db));
+  const activate = createActivateMembershipFromOrgEvent(
+    createPrismaMembershipRepository(db, tenantDb),
+  );
   await activate(input);
 }

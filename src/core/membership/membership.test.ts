@@ -7,7 +7,10 @@ import { createMemoryMembershipRepository } from "@/core/membership/adapters/out
 import { MembershipError } from "@/core/membership/application/errors";
 import { createActivateMembershipFromOrgEvent } from "@/core/membership/application/use-cases/activate-membership";
 import { createInviteMember } from "@/core/membership/application/use-cases/invite-member";
-import { createListPendingInvites } from "@/core/membership/application/use-cases/list-members";
+import {
+  createListMembers,
+  createListPendingInvites,
+} from "@/core/membership/application/use-cases/list-members";
 
 const tenantA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const tenantB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -228,6 +231,66 @@ describe("activateMembershipFromOrgEvent", () => {
     assert.equal(result, null);
     const pending = await createListPendingInvites(repo)(ownerA);
     assert.equal(pending.length, 1);
+  });
+});
+
+describe("listMembers", () => {
+  it("no lista miembros de otro negocio", async () => {
+    const otherUserId = "66666666-6666-6666-6666-666666666666";
+    const repo = createMemoryMembershipRepository({
+      tenants: [
+        {
+          id: tenantA,
+          slug: "demo",
+          name: "Peluquería Demo",
+          clerkOrganizationId: "org_demo",
+        },
+        {
+          id: tenantB,
+          slug: "otro",
+          name: "Otro",
+          clerkOrganizationId: "org_other",
+        },
+      ],
+      users: [
+        {
+          id: ownerUserId,
+          externalId: "user_owner",
+          email: "owner@demo.local",
+          firstName: "Dev",
+          lastName: "Owner",
+        },
+        {
+          id: otherUserId,
+          externalId: "user_other",
+          email: "secreto@otro.local",
+          firstName: "Otro",
+          lastName: "Dueño",
+        },
+      ],
+      members: [
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          tenantId: tenantA,
+          userId: ownerUserId,
+          role: "OWNER",
+          isActive: true,
+        },
+        {
+          id: "77777777-7777-7777-7777-777777777777",
+          tenantId: tenantB,
+          userId: otherUserId,
+          role: "OWNER",
+          isActive: true,
+        },
+      ],
+    });
+
+    const listed = await createListMembers(repo)(ownerA);
+    assert.deepEqual(
+      listed.map((member) => member.email),
+      ["owner@demo.local"],
+    );
   });
 });
 

@@ -83,9 +83,12 @@ export function createMemoryMembershipRepository(seed?: {
       );
       return row ? { ...row } : null;
     },
-    async findPendingInviteByClerkInvitationId(clerkInvitationId) {
+    async findPendingInviteByClerkInvitationId(tenantId, clerkInvitationId) {
       const row = [...invites.values()].find(
-        (item) => item.clerkInvitationId === clerkInvitationId && item.status === "PENDING",
+        (item) =>
+          item.tenantId === tenantId &&
+          item.clerkInvitationId === clerkInvitationId &&
+          item.status === "PENDING",
       );
       return row ? { ...row } : null;
     },
@@ -126,9 +129,9 @@ export function createMemoryMembershipRepository(seed?: {
       invites.set(row.id, row);
       return { ...row };
     },
-    async markInviteAccepted(inviteId) {
+    async markInviteAccepted(tenantId, inviteId) {
       const row = invites.get(inviteId);
-      if (!row) {
+      if (!row || row.tenantId !== tenantId) {
         throw new Error("INVITE_NOT_FOUND");
       }
       row.status = "ACCEPTED";

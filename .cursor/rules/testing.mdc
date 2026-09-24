@@ -1,0 +1,28 @@
+---
+description: Cómo se escribe una prueba — primero el comportamiento, aislamiento y datos propios
+alwaysApply: true
+---
+
+# Cómo se escribe una prueba
+
+La estrategia vive en `docs/17-testing.md`. Cómo se escribe, en `docs/14-coding-standards.md` §10.
+
+## Antes del código
+
+En dominio y casos de uso, escribí la prueba y mirala fallar antes de escribir el código. Si pasa sin código nuevo, no está probando nada.
+
+`describe` nombra el caso de uso. `it` es una frase en español:
+
+```ts
+it("no cancela el turno de otro negocio", async () => {
+  // preparar, ejecutar, comprobar
+});
+```
+
+## Aislamiento
+
+Toda operación con tenant se prueba con dos negocios: el A no ve ni modifica las filas del B. Probá lo permitido y lo prohibido de cada rol.
+
+## Base de datos
+
+Una prueba que escribe en una base usa `TEST_DATABASE_URL` y `TEST_DIRECT_URL`. Nunca `DATABASE_URL`. Crea sus datos, los borra y no usa datos reales.

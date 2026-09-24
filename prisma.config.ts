@@ -5,7 +5,9 @@ import { withExplicitPgSsl } from "./src/lib/pg-connection-string";
 
 config({ path: ".env.local" });
 
-const databaseUrl = process.env["DATABASE_URL"];
+// Las migraciones usan el rol dueño. Mientras DATABASE_URL siga siendo ese rol,
+// DIRECT_URL puede faltar y se usa la misma URL.
+const databaseUrl = process.env["DIRECT_URL"] ?? process.env["DATABASE_URL"];
 
 export default defineConfig({
   schema: "prisma/schema.prisma",

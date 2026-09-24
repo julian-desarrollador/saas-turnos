@@ -8,9 +8,10 @@ import {
   Shield,
   Users,
   UsersRound,
+  type LucideIcon,
 } from "lucide-react";
 import type { Route } from "next";
-import Link from "next/link";
+import Link, { useLinkStatus } from "next/link";
 import { usePathname } from "next/navigation";
 import { useId, useState } from "react";
 
@@ -84,17 +85,13 @@ function BottomNavBar({
               const active = isPanelLinkActive(pathname, slug, link.path);
               const Icon = moreIcons[link.path as keyof typeof moreIcons];
               return (
-                <Link
+                <MoreNavLink
                   key={link.path}
                   href={href}
-                  className={cn(
-                    "text-foreground flex min-h-14 items-center gap-3 rounded-2xl px-3 text-base font-medium",
-                    active && "bg-muted",
-                  )}
-                >
-                  <Icon className="size-5 shrink-0" aria-hidden />
-                  {link.label}
-                </Link>
+                  active={active}
+                  label={link.label}
+                  icon={Icon}
+                />
               );
             })}
           </nav>
@@ -106,17 +103,13 @@ function BottomNavBar({
           const href = `/${slug}/${link.path}` as Route;
           const active = isPanelLinkActive(pathname, slug, link.path);
           return (
-            <Link
+            <PrimaryNavLink
               key={link.path}
               href={href}
-              className={cn(
-                "flex min-h-14 flex-col items-center justify-center gap-1 text-xs",
-                active ? "text-foreground font-medium" : "text-muted-foreground",
-              )}
-            >
-              <Icon className="size-5" aria-hidden />
-              {link.label}
-            </Link>
+              active={active}
+              label={link.label}
+              icon={Icon}
+            />
           );
         })}
         <button
@@ -135,5 +128,93 @@ function BottomNavBar({
         </button>
       </nav>
     </div>
+  );
+}
+
+function PrimaryNavLink({
+  href,
+  active,
+  label,
+  icon,
+}: {
+  href: Route;
+  active: boolean;
+  label: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <Link href={href} className="block">
+      <PrimaryNavLabel active={active} label={label} icon={icon} />
+    </Link>
+  );
+}
+
+function PrimaryNavLabel({
+  active,
+  label,
+  icon: Icon,
+}: {
+  active: boolean;
+  label: string;
+  icon: LucideIcon;
+}) {
+  const { pending } = useLinkStatus();
+  const highlighted = active || pending;
+
+  return (
+    <span
+      aria-busy={pending}
+      className={cn(
+        "flex min-h-14 w-full flex-col items-center justify-center gap-1 text-xs",
+        highlighted ? "text-foreground font-medium" : "text-muted-foreground",
+      )}
+    >
+      <Icon className="size-5" aria-hidden />
+      {label}
+    </span>
+  );
+}
+
+function MoreNavLink({
+  href,
+  active,
+  label,
+  icon,
+}: {
+  href: Route;
+  active: boolean;
+  label: string;
+  icon: LucideIcon;
+}) {
+  return (
+    <Link href={href} className="block">
+      <MoreNavLabel active={active} label={label} icon={icon} />
+    </Link>
+  );
+}
+
+function MoreNavLabel({
+  active,
+  label,
+  icon: Icon,
+}: {
+  active: boolean;
+  label: string;
+  icon: LucideIcon;
+}) {
+  const { pending } = useLinkStatus();
+  const highlighted = active || pending;
+
+  return (
+    <span
+      aria-busy={pending}
+      className={cn(
+        "text-foreground flex min-h-14 w-full items-center gap-3 rounded-2xl px-3 text-base font-medium",
+        highlighted && "bg-muted",
+      )}
+    >
+      <Icon className="size-5 shrink-0" aria-hidden />
+      {label}
+    </span>
   );
 }

@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import type { TenantDb, TenantTx } from "@/server/tenant-db";
 
 import { evaluateReservation } from "@/modules/booking/application/evaluate-reservation";
 import type {
@@ -42,7 +43,7 @@ const serviceSelect = {
 } as const;
 
 type SnapshotDb = Pick<
-  PrismaClient,
+  TenantTx,
   "tenant" | "professional" | "service" | "weeklySchedule" | "calendarBlock" | "appointment"
 >;
 
@@ -81,7 +82,7 @@ function uniqueSortedDayKeys(keys: string[]): string[] {
 }
 
 async function lockProfessionalDays(
-  tx: Pick<PrismaClient, "$executeRaw">,
+  tx: Pick<TenantTx, "$executeRaw">,
   tenantId: string,
   keys: string[],
 ): Promise<void> {
@@ -277,147 +278,164 @@ function toOccupyingStatus(status: string): OccupyingAppointmentStatus {
   return "CONFIRMED";
 }
 
-export function createPrismaAvailabilityRepository(db: PrismaClient): AvailabilityRepository {
+export function createPrismaAvailabilityRepository(
+  _db: PrismaClient,
+  tenantDb: TenantDb,
+): AvailabilityRepository {
   return {
     async listProfessionals(tenantId) {
-      const rows = await db.professional.findMany({
-        where: { tenantId },
-        select: professionalSelect,
-        orderBy: { displayName: "asc" },
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.professional.findMany({
+          where: { tenantId },
+          select: professionalSelect,
+          orderBy: { displayName: "asc" },
+        });
+        return rows.map(toProfessional);
       });
-      return rows.map(toProfessional);
     },
     async listServices(tenantId) {
-      const rows = await db.service.findMany({
-        where: { tenantId },
-        select: serviceSelect,
-        orderBy: { name: "asc" },
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.service.findMany({
+          where: { tenantId },
+          select: serviceSelect,
+          orderBy: { name: "asc" },
+        });
+        return rows.map(toService);
       });
-      return rows.map(toService);
     },
     async loadSnapshot(tenantId, professionalId, serviceId, localDate, excludeAppointmentId) {
-      return readAvailabilitySnapshot(
-        db,
-        tenantId,
-        professionalId,
-        serviceId,
-        localDate,
-        excludeAppointmentId,
+      return tenantDb.run(tenantId, (tx) =>
+        readAvailabilitySnapshot(
+          tx,
+          tenantId,
+          professionalId,
+          serviceId,
+          localDate,
+          excludeAppointmentId,
+        ),
       );
     },
     async findAppointment(tenantId, appointmentId) {
-      const row = await db.appointment.findFirst({
-        where: { tenantId, id: appointmentId },
-        select: appointmentDetailSelect,
+      return tenantDb.run(tenantId, async (tx) => {
+        const row = await tx.appointment.findFirst({
+          where: { tenantId, id: appointmentId },
+          select: appointmentDetailSelect,
+        });
+        if (!row) {
+          return null;
+        }
+        return toAppointmentDetail(row);
       });
-      if (!row) {
-        return null;
-      }
-      return toAppointmentDetail(row);
     },
     async listDayAppointments(tenantId, professionalId, localDate) {
-      const rows = await db.appointment.findMany({
-        where: {
-          tenantId,
-          professionalId,
-          localDate,
-          status: { notIn: ["CANCELLED", "NO_SHOW"] },
-        },
-        select: {
-          id: true,
-          localTime: true,
-          durationMinutes: true,
-          status: true,
-          clientId: true,
-          client: { select: { firstName: true, lastName: true, phone: true } },
-          services: { select: { serviceName: true } },
-        },
-        orderBy: [{ localTime: "asc" }, { id: "asc" }],
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.appointment.findMany({
+          where: {
+            tenantId,
+            professionalId,
+            localDate,
+            status: { notIn: ["CANCELLED", "NO_SHOW"] },
+          },
+          select: {
+            id: true,
+            localTime: true,
+            durationMinutes: true,
+            status: true,
+            clientId: true,
+            client: { select: { firstName: true, lastName: true, phone: true } },
+            services: { select: { serviceName: true } },
+          },
+          orderBy: [{ localTime: "asc" }, { id: "asc" }],
+        });
+        return rows.map((row): DayAppointmentRecord => ({
+          id: row.id,
+          localTime: row.localTime,
+          durationMinutes: row.durationMinutes,
+          status: toOccupyingStatus(row.status),
+          serviceName: row.services[0]?.serviceName ?? "Servicio",
+          clientId: row.clientId,
+          clientFirstName: row.client.firstName,
+          clientLastName: row.client.lastName,
+          clientPhone: row.client.phone,
+        }));
       });
-      return rows.map((row): DayAppointmentRecord => ({
-        id: row.id,
-        localTime: row.localTime,
-        durationMinutes: row.durationMinutes,
-        status: toOccupyingStatus(row.status),
-        serviceName: row.services[0]?.serviceName ?? "Servicio",
-        clientId: row.clientId,
-        clientFirstName: row.client.firstName,
-        clientLastName: row.client.lastName,
-        clientPhone: row.client.phone,
-      }));
     },
     async listMonthAppointments(tenantId, fromDate, toDate) {
-      const rows = await db.appointment.findMany({
-        where: {
-          tenantId,
-          localDate: { gte: fromDate, lte: toDate },
-        },
-        select: {
-          id: true,
-          localDate: true,
-          localTime: true,
-          durationMinutes: true,
-          status: true,
-          professionalId: true,
-          clientId: true,
-          professional: { select: { displayName: true } },
-          client: { select: { firstName: true, lastName: true, phone: true } },
-          services: { select: { serviceName: true } },
-        },
-        orderBy: [{ localDate: "asc" }, { localTime: "asc" }, { id: "asc" }],
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.appointment.findMany({
+          where: {
+            tenantId,
+            localDate: { gte: fromDate, lte: toDate },
+          },
+          select: {
+            id: true,
+            localDate: true,
+            localTime: true,
+            durationMinutes: true,
+            status: true,
+            professionalId: true,
+            clientId: true,
+            professional: { select: { displayName: true } },
+            client: { select: { firstName: true, lastName: true, phone: true } },
+            services: { select: { serviceName: true } },
+          },
+          orderBy: [{ localDate: "asc" }, { localTime: "asc" }, { id: "asc" }],
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          localDate: row.localDate,
+          localTime: row.localTime,
+          durationMinutes: row.durationMinutes,
+          status: row.status as
+            "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "NO_SHOW",
+          professionalId: row.professionalId,
+          professionalName: row.professional.displayName,
+          serviceName: row.services[0]?.serviceName ?? "Servicio",
+          clientId: row.clientId,
+          clientFirstName: row.client.firstName,
+          clientLastName: row.client.lastName,
+          clientPhone: row.client.phone,
+        }));
       });
-      return rows.map((row) => ({
-        id: row.id,
-        localDate: row.localDate,
-        localTime: row.localTime,
-        durationMinutes: row.durationMinutes,
-        status: row.status as
-          "PENDING" | "CONFIRMED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "NO_SHOW",
-        professionalId: row.professionalId,
-        professionalName: row.professional.displayName,
-        serviceName: row.services[0]?.serviceName ?? "Servicio",
-        clientId: row.clientId,
-        clientFirstName: row.client.firstName,
-        clientLastName: row.client.lastName,
-        clientPhone: row.client.phone,
-      }));
     },
     async listMonthBlocks(tenantId, fromDate, toDate) {
-      const rows = await db.calendarBlock.findMany({
-        where: {
-          tenantId,
-          startDate: { lte: toDate },
-          endDate: { gte: fromDate },
-        },
-        select: {
-          id: true,
-          startDate: true,
-          endDate: true,
-          startTime: true,
-          endTime: true,
-          reason: true,
-          professionalId: true,
-          branchId: true,
-          professional: { select: { displayName: true } },
-          branch: { select: { name: true } },
-        },
-        orderBy: [{ startDate: "asc" }, { id: "asc" }],
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.calendarBlock.findMany({
+          where: {
+            tenantId,
+            startDate: { lte: toDate },
+            endDate: { gte: fromDate },
+          },
+          select: {
+            id: true,
+            startDate: true,
+            endDate: true,
+            startTime: true,
+            endTime: true,
+            reason: true,
+            professionalId: true,
+            branchId: true,
+            professional: { select: { displayName: true } },
+            branch: { select: { name: true } },
+          },
+          orderBy: [{ startDate: "asc" }, { id: "asc" }],
+        });
+        return rows.map((row) => ({
+          id: row.id,
+          startDate: row.startDate,
+          endDate: row.endDate,
+          startTime: row.startTime,
+          endTime: row.endTime,
+          reason: row.reason,
+          professionalId: row.professionalId,
+          professionalName: row.professional?.displayName ?? null,
+          branchId: row.branchId,
+          branchName: row.branch?.name ?? null,
+        }));
       });
-      return rows.map((row) => ({
-        id: row.id,
-        startDate: row.startDate,
-        endDate: row.endDate,
-        startTime: row.startTime,
-        endTime: row.endTime,
-        reason: row.reason,
-        professionalId: row.professionalId,
-        professionalName: row.professional?.displayName ?? null,
-        branchId: row.branchId,
-        branchName: row.branch?.name ?? null,
-      }));
     },
     async reserveSlot(input) {
-      return db.$transaction(async (tx) => {
+      return tenantDb.run(input.tenantId, async (tx) => {
         const professional = await tx.professional.findFirst({
           where: { tenantId: input.tenantId, id: input.professionalId },
           select: { branchId: true },
@@ -491,38 +509,38 @@ export function createPrismaAvailabilityRepository(db: PrismaClient): Availabili
       });
     },
     async rescheduleSlot(input) {
-      const existing = await db.appointment.findFirst({
-        where: { tenantId: input.tenantId, id: input.appointmentId },
-        select: {
-          id: true,
-          status: true,
-          professionalId: true,
-          branchId: true,
-          localDate: true,
-          localTime: true,
-          clientId: true,
-          services: { select: { serviceId: true } },
-        },
-      });
-      if (!existing) {
-        return { status: "not_found" };
-      }
-      if (!canRescheduleAppointment(existing.status)) {
-        return { status: "not_movable" };
-      }
-      const serviceId = existing.services[0]?.serviceId;
-      if (!serviceId) {
-        return { status: "not_found" };
-      }
-      if (
-        existing.professionalId === input.professionalId &&
-        existing.localDate === input.localDate &&
-        existing.localTime === input.localTime
-      ) {
-        return { status: "no_change" };
-      }
+      return tenantDb.run(input.tenantId, async (tx) => {
+        const existing = await tx.appointment.findFirst({
+          where: { tenantId: input.tenantId, id: input.appointmentId },
+          select: {
+            id: true,
+            status: true,
+            professionalId: true,
+            branchId: true,
+            localDate: true,
+            localTime: true,
+            clientId: true,
+            services: { select: { serviceId: true } },
+          },
+        });
+        if (!existing) {
+          return { status: "not_found" as const };
+        }
+        if (!canRescheduleAppointment(existing.status)) {
+          return { status: "not_movable" as const };
+        }
+        const serviceId = existing.services[0]?.serviceId;
+        if (!serviceId) {
+          return { status: "not_found" as const };
+        }
+        if (
+          existing.professionalId === input.professionalId &&
+          existing.localDate === input.localDate &&
+          existing.localTime === input.localTime
+        ) {
+          return { status: "no_change" as const };
+        }
 
-      return db.$transaction(async (tx) => {
         const destination = await tx.professional.findFirst({
           where: { tenantId: input.tenantId, id: input.professionalId },
           select: { branchId: true },
@@ -608,68 +626,74 @@ export function createPrismaAvailabilityRepository(db: PrismaClient): Availabili
       });
     },
     async cancelAppointment(tenantId, appointmentId, cancelledBy) {
-      const existing = await db.appointment.findFirst({
-        where: { tenantId, id: appointmentId },
-        select: { id: true, status: true },
-      });
-      if (!existing) {
-        return { status: "not_found" };
-      }
-      if (existing.status === "CANCELLED") {
-        return { status: "already_cancelled" };
-      }
-      if (!canCancelAppointment(existing.status)) {
-        return { status: "not_cancellable" };
-      }
+      return tenantDb.run(tenantId, async (tx) => {
+        const existing = await tx.appointment.findFirst({
+          where: { tenantId, id: appointmentId },
+          select: { id: true, status: true },
+        });
+        if (!existing) {
+          return { status: "not_found" as const };
+        }
+        if (existing.status === "CANCELLED") {
+          return { status: "already_cancelled" as const };
+        }
+        if (!canCancelAppointment(existing.status)) {
+          return { status: "not_cancellable" as const };
+        }
 
-      await db.appointment.updateMany({
-        where: { id: existing.id, tenantId },
-        data: { status: "CANCELLED", cancelledBy },
+        await tx.appointment.updateMany({
+          where: { id: existing.id, tenantId },
+          data: { status: "CANCELLED", cancelledBy },
+        });
+        const result: CancelAppointmentResult = { status: "cancelled" };
+        return result;
       });
-      const result: CancelAppointmentResult = { status: "cancelled" };
-      return result;
     },
     async markNoShow(tenantId, appointmentId) {
-      const existing = await db.appointment.findFirst({
-        where: { tenantId, id: appointmentId },
-        select: { id: true, status: true },
-      });
-      if (!existing) {
-        return { status: "not_found" };
-      }
-      if (existing.status === "NO_SHOW") {
-        return { status: "already_no_show" };
-      }
-      if (!canMarkNoShow(existing.status)) {
-        return { status: "not_no_showable" };
-      }
+      return tenantDb.run(tenantId, async (tx) => {
+        const existing = await tx.appointment.findFirst({
+          where: { tenantId, id: appointmentId },
+          select: { id: true, status: true },
+        });
+        if (!existing) {
+          return { status: "not_found" as const };
+        }
+        if (existing.status === "NO_SHOW") {
+          return { status: "already_no_show" as const };
+        }
+        if (!canMarkNoShow(existing.status)) {
+          return { status: "not_no_showable" as const };
+        }
 
-      await db.appointment.updateMany({
-        where: { id: existing.id, tenantId },
-        data: { status: "NO_SHOW" },
+        await tx.appointment.updateMany({
+          where: { id: existing.id, tenantId },
+          data: { status: "NO_SHOW" },
+        });
+        return { status: "marked" as const };
       });
-      return { status: "marked" };
     },
     async markCompleted(tenantId, appointmentId) {
-      const existing = await db.appointment.findFirst({
-        where: { tenantId, id: appointmentId },
-        select: { id: true, status: true },
-      });
-      if (!existing) {
-        return { status: "not_found" };
-      }
-      if (existing.status === "COMPLETED") {
-        return { status: "already_completed" };
-      }
-      if (!canMarkCompleted(existing.status)) {
-        return { status: "not_completable" };
-      }
+      return tenantDb.run(tenantId, async (tx) => {
+        const existing = await tx.appointment.findFirst({
+          where: { tenantId, id: appointmentId },
+          select: { id: true, status: true },
+        });
+        if (!existing) {
+          return { status: "not_found" as const };
+        }
+        if (existing.status === "COMPLETED") {
+          return { status: "already_completed" as const };
+        }
+        if (!canMarkCompleted(existing.status)) {
+          return { status: "not_completable" as const };
+        }
 
-      await db.appointment.updateMany({
-        where: { id: existing.id, tenantId },
-        data: { status: "COMPLETED" },
+        await tx.appointment.updateMany({
+          where: { id: existing.id, tenantId },
+          data: { status: "COMPLETED" },
+        });
+        return { status: "marked" as const };
       });
-      return { status: "marked" };
     },
   };
 }

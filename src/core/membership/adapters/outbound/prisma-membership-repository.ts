@@ -7,6 +7,7 @@ import type {
   TenantOrgRecord,
 } from "@/core/membership/application/ports/membership-repository";
 import type { PrismaClient } from "@/generated/prisma/client";
+import type { TenantDb } from "@/server/tenant-db";
 
 const tenantSelect = {
   id: true,
@@ -90,7 +91,10 @@ function toInviteRecord(row: {
   };
 }
 
-export function createPrismaMembershipRepository(db: PrismaClient): MembershipRepository {
+export function createPrismaMembershipRepository(
+  db: PrismaClient,
+  tenantDb: TenantDb,
+): MembershipRepository {
   async function memberByUser(tenantId: string, userId: string): Promise<MemberRecord | null> {
     const row = await db.membership.findUnique({
       where: { tenantId_userId: { tenantId, userId } },
@@ -124,28 +128,31 @@ export function createPrismaMembershipRepository(db: PrismaClient): MembershipRe
         .filter((row): row is MemberRecord => row !== null);
     },
     async listPendingInvites(tenantId) {
-      const rows = await db.membershipInvite.findMany({
-        where: { tenantId, status: "PENDING" },
-        orderBy: { email: "asc" },
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.membershipInvite.findMany({
+          where: { tenantId, status: "PENDING" },
+          orderBy: { email: "asc" },
+        });
+        return rows
+          .map((row) => toInviteRecord(row))
+          .filter((row): row is MembershipInviteRecord => row !== null);
       });
-      return rows
-        .map((row) => toInviteRecord(row))
-        .filter((row): row is MembershipInviteRecord => row !== null);
     },
     async findPendingInviteByEmail(tenantId, email) {
-      const row = await db.membershipInvite.findFirst({
-        where: { tenantId, email, status: "PENDING" },
+      return tenantDb.run(tenantId, async (tx) => {
+        const row = await tx.membershipInvite.findFirst({
+          where: { tenantId, email, status: "PENDING" },
+        });
+        return row ? toInviteRecord(row) : null;
       });
-      return row ? toInviteRecord(row) : null;
     },
-    async findPendingInviteByClerkInvitationId(clerkInvitationId) {
-      const row = await db.membershipInvite.findUnique({
-        where: { clerkInvitationId },
+    async findPendingInviteByClerkInvitationId(tenantId, clerkInvitationId) {
+      return tenantDb.run(tenantId, async (tx) => {
+        const row = await tx.membershipInvite.findFirst({
+          where: { tenantId, clerkInvitationId, status: "PENDING" },
+        });
+        return row ? toInviteRecord(row) : null;
       });
-      if (!row || row.status !== "PENDING") {
-        return null;
-      }
-      return toInviteRecord(row);
     },
     async findMemberByEmail(tenantId, email) {
       const user = await db.user.findFirst({
@@ -180,16 +187,18 @@ export function createPrismaMembershipRepository(db: PrismaClient): MembershipRe
     },
     async createInvite(data) {
       try {
-        const row = await db.membershipInvite.create({
-          data: {
-            tenantId: data.tenantId,
-            email: data.email,
-            role: data.role,
-            status: "PENDING",
-            clerkInvitationId: data.clerkInvitationId,
-            invitedByUserId: data.invitedByUserId,
-          },
-        });
+        const row = await tenantDb.run(data.tenantId, (tx) =>
+          tx.membershipInvite.create({
+            data: {
+              tenantId: data.tenantId,
+              email: data.email,
+              role: data.role,
+              status: "PENDING",
+              clerkInvitationId: data.clerkInvitationId,
+              invitedByUserId: data.invitedByUserId,
+            },
+          }),
+        );
         const record = toInviteRecord(row);
         if (!record) {
           throw new Error("INVITE_ROLE_INVALID");
@@ -202,10 +211,15 @@ export function createPrismaMembershipRepository(db: PrismaClient): MembershipRe
         throw error;
       }
     },
-    async markInviteAccepted(inviteId) {
-      await db.membershipInvite.update({
-        where: { id: inviteId },
-        data: { status: "ACCEPTED" },
+    async markInviteAccepted(tenantId, inviteId) {
+      await tenantDb.run(tenantId, async (tx) => {
+        const updated = await tx.membershipInvite.updateMany({
+          where: { id: inviteId, tenantId, status: "PENDING" },
+          data: { status: "ACCEPTED" },
+        });
+        if (updated.count !== 1) {
+          throw new Error("INVITE_NOT_FOUND");
+        }
       });
     },
     async createMembership(data) {

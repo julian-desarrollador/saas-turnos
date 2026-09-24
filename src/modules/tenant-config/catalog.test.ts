@@ -4,11 +4,18 @@ import { describe, it } from "node:test";
 import { ForbiddenError } from "@/core/authorization";
 import { createMemoryCatalog } from "@/modules/tenant-config/adapters/outbound/memory-catalog-repository";
 import { TenantConfigError } from "@/modules/tenant-config/application/errors";
+import { createListBranches } from "@/modules/tenant-config/application/use-cases/branches";
 import {
   createCreateProfessional,
+  createListProfessionals,
+  createSetProfessionalServices,
   createUpdateProfessional,
 } from "@/modules/tenant-config/application/use-cases/professionals";
-import { createCreateService } from "@/modules/tenant-config/application/use-cases/services";
+import {
+  createCreateService,
+  createListServices,
+  createUpdateService,
+} from "@/modules/tenant-config/application/use-cases/services";
 
 const tenantA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const tenantB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -153,5 +160,157 @@ describe("createService success path", () => {
     assert.equal(created.name, "Corte");
     const listed = await catalog.services.listByTenant(tenantA);
     assert.equal(listed.length, 1);
+  });
+});
+
+const professionalA = "44444444-4444-4444-4444-444444444444";
+const branchB = "33333333-3333-3333-3333-333333333333";
+const serviceA = "55555555-5555-5555-5555-555555555555";
+const serviceB = "66666666-6666-6666-6666-666666666666";
+
+function isolationCatalog() {
+  return createMemoryCatalog({
+    branches: [
+      { id: branchA, tenantId: tenantA, name: "Sede principal" },
+      { id: branchB, tenantId: tenantB, name: "Sede ajena" },
+    ],
+    professionals: [
+      {
+        id: professionalA,
+        tenantId: tenantA,
+        branchId: branchA,
+        displayName: "Ana",
+        color: null,
+        isActive: true,
+        serviceIds: [],
+      },
+      {
+        id: professionalB,
+        tenantId: tenantB,
+        branchId: branchB,
+        displayName: "De otro negocio",
+        color: null,
+        isActive: true,
+        serviceIds: [],
+      },
+    ],
+    services: [
+      {
+        id: serviceA,
+        tenantId: tenantA,
+        name: "Corte",
+        durationMinutes: 45,
+        priceAmount: 8000,
+        prepMinutes: 0,
+        cleanupMinutes: 0,
+        earliestStart: null,
+        latestStart: null,
+        requiresDeposit: false,
+        isActive: true,
+      },
+      {
+        id: serviceB,
+        tenantId: tenantB,
+        name: "Servicio ajeno",
+        durationMinutes: 30,
+        priceAmount: 5000,
+        prepMinutes: 0,
+        cleanupMinutes: 0,
+        earliestStart: null,
+        latestStart: null,
+        requiresDeposit: false,
+        isActive: true,
+      },
+    ],
+  });
+}
+
+describe("aislamiento de catálogo entre negocios", () => {
+  it("no lista profesionales, servicios ni sedes de otro negocio", async () => {
+    const catalog = isolationCatalog();
+    const professionals = await createListProfessionals(catalog)(ownerA);
+    const services = await createListServices(catalog)(ownerA);
+    const branches = await createListBranches(catalog)(ownerA);
+    assert.deepEqual(
+      professionals.map((row) => row.id),
+      [professionalA],
+    );
+    assert.deepEqual(
+      services.map((row) => row.id),
+      [serviceA],
+    );
+    assert.deepEqual(
+      branches.map((row) => row.id),
+      [branchA],
+    );
+  });
+
+  it("no actualiza un servicio de otro negocio", async () => {
+    const catalog = isolationCatalog();
+    const updateService = createUpdateService(catalog);
+    await assert.rejects(
+      () =>
+        updateService({
+          actor: ownerA,
+          serviceId: serviceB,
+          name: "Intruso",
+        }),
+      (error: unknown) => error instanceof TenantConfigError && error.code === "NOT_FOUND",
+    );
+    const untouched = await catalog.services.findById(tenantB, serviceB);
+    assert.equal(untouched?.name, "Servicio ajeno");
+  });
+
+  it("no asigna servicios a un profesional de otro negocio", async () => {
+    const catalog = isolationCatalog();
+    const setProfessionalServices = createSetProfessionalServices(catalog);
+    await assert.rejects(
+      () =>
+        setProfessionalServices({
+          actor: ownerA,
+          professionalId: professionalB,
+          serviceIds: [serviceA],
+        }),
+      (error: unknown) => error instanceof TenantConfigError && error.code === "NOT_FOUND",
+    );
+    const untouched = await catalog.professionals.findById(tenantB, professionalB);
+    assert.deepEqual(untouched?.serviceIds, []);
+  });
+
+  it("no acepta un servicio de otro negocio aunque el id venga en el input", async () => {
+    const catalog = isolationCatalog();
+    const setProfessionalServices = createSetProfessionalServices(catalog);
+    await assert.rejects(
+      () =>
+        setProfessionalServices({
+          actor: ownerA,
+          professionalId: professionalA,
+          serviceIds: [serviceB],
+        }),
+      (error: unknown) =>
+        error instanceof TenantConfigError && error.reason === "SERVICES_NOT_IN_TENANT",
+    );
+    const untouched = await catalog.professionals.findById(tenantA, professionalA);
+    assert.deepEqual(untouched?.serviceIds, []);
+  });
+
+  it("no crea un profesional en la sede de otro negocio", async () => {
+    const catalog = isolationCatalog();
+    const createProfessional = createCreateProfessional(catalog);
+    await assert.rejects(
+      () =>
+        createProfessional({
+          actor: ownerA,
+          displayName: "Intruso",
+          color: null,
+          branchId: branchB,
+        }),
+      (error: unknown) => error instanceof TenantConfigError && error.reason === "BRANCH_REQUIRED",
+    );
+    const others = await catalog.professionals.listByTenant(tenantB);
+    assert.deepEqual(
+      others.map((row) => row.id),
+      [professionalB],
+    );
   });
 });

@@ -15,11 +15,11 @@ import {
 import { createUpdateClientFicha } from "@/modules/clients/application/use-cases/update-client-ficha";
 import { clientFichaHref } from "@/modules/clients/components/client-ficha-view";
 import { resolveTenantContext } from "@/server/auth";
-import { db } from "@/server/db";
+import { db, tenantDb } from "@/server/db";
 
 import { clientsValidationMessage } from "./messages";
 
-const repo = createPrismaClientRepository(db);
+const repo = createPrismaClientRepository(db, tenantDb);
 const listClients = createListClients(repo);
 const getClientFicha = createGetClientFicha(repo);
 const updateClientFicha = createUpdateClientFicha(repo);

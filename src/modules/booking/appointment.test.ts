@@ -6,7 +6,9 @@ import { BookingError } from "@/modules/booking/application/errors";
 import type { AvailabilitySnapshot } from "@/modules/booking/application/ports/availability-repository";
 import { createCancelAppointment } from "@/modules/booking/application/use-cases/cancel-appointment";
 import { createCreateAppointment } from "@/modules/booking/application/use-cases/create-appointment";
+import { createGetAppointment } from "@/modules/booking/application/use-cases/get-appointment";
 import { createListAvailableSlots } from "@/modules/booking/application/use-cases/list-available-slots";
+import { createListMonthAgenda } from "@/modules/booking/application/use-cases/list-month-agenda";
 import { createListRescheduleProfessionals } from "@/modules/booking/application/use-cases/list-reschedule-professionals";
 import {
   createListDayAppointments,
@@ -17,6 +19,7 @@ import { createMarkNoShow } from "@/modules/booking/application/use-cases/mark-n
 import { createRescheduleAppointment } from "@/modules/booking/application/use-cases/reschedule-appointment";
 
 const tenantA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+const tenantB = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const professionalA = "11111111-1111-1111-1111-111111111111";
 const professionalB = "44444444-4444-4444-4444-444444444444";
 const serviceA = "22222222-2222-2222-2222-222222222222";
@@ -974,5 +977,149 @@ describe("listRescheduleProfessionals", () => {
       [professionalA],
     );
     assert.equal(result.emptyReason, null);
+  });
+});
+
+const otherAppointmentId = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbb1";
+
+function otherBusinessRepo() {
+  return createMemoryAvailabilityRepository({
+    snapshot: snapshot(),
+    dayAppointments: [
+      {
+        id: otherAppointmentId,
+        tenantId: tenantB,
+        professionalId: professionalA,
+        localDate: "2026-08-25",
+        localTime: "10:00",
+        durationMinutes: 50,
+        status: "CONFIRMED",
+        serviceName: "Corte de dama",
+        serviceId: serviceA,
+        clientId: clientA,
+        clientFirstName: "Otra",
+        clientLastName: null,
+        clientPhone: "+5491199999999",
+      },
+    ],
+  });
+}
+
+function isNotFound(error: unknown): boolean {
+  return error instanceof BookingError && error.code === "NOT_FOUND";
+}
+
+describe("aislamiento de turnos entre negocios", () => {
+  it("no lista el día de otro negocio", async () => {
+    const listDayAppointments = createListDayAppointments(otherBusinessRepo());
+    const rows = await listDayAppointments({
+      actor,
+      professionalId: professionalA,
+      localDate: "2026-08-25",
+    });
+    assert.deepEqual(rows, []);
+  });
+
+  it("no lista el mes de otro negocio", async () => {
+    const listMonthAgenda = createListMonthAgenda(otherBusinessRepo());
+    const month = await listMonthAgenda({ actor, yearMonth: "2026-08" });
+    assert.deepEqual(month.appointments, []);
+  });
+
+  it("no muestra el turno de otro negocio", async () => {
+    const getAppointment = createGetAppointment(otherBusinessRepo());
+    await assert.rejects(
+      () => getAppointment({ actor, appointmentId: otherAppointmentId }),
+      isNotFound,
+    );
+  });
+
+  it("no cancela el turno de otro negocio", async () => {
+    const repo = otherBusinessRepo();
+    const cancelAppointment = createCancelAppointment(repo);
+    await assert.rejects(
+      () => cancelAppointment({ actor, appointmentId: otherAppointmentId }),
+      isNotFound,
+    );
+    const untouched = await repo.findAppointment(tenantB, otherAppointmentId);
+    assert.equal(untouched?.status, "CONFIRMED");
+  });
+
+  it("no reprograma el turno de otro negocio", async () => {
+    const repo = otherBusinessRepo();
+    const rescheduleAppointment = createRescheduleAppointment(repo);
+    await assert.rejects(
+      () =>
+        rescheduleAppointment({
+          actor,
+          appointmentId: otherAppointmentId,
+          professionalId: professionalA,
+          localDate: "2026-08-25",
+          localTime: "11:00",
+          now: tuesdayMorning,
+        }),
+      isNotFound,
+    );
+    const untouched = await repo.findAppointment(tenantB, otherAppointmentId);
+    assert.equal(untouched?.localTime, "10:00");
+  });
+
+  it("no marca ausente ni atendido un turno de otro negocio", async () => {
+    const repo = otherBusinessRepo();
+    const markNoShow = createMarkNoShow(repo);
+    const markCompleted = createMarkCompleted(repo);
+    await assert.rejects(
+      () => markNoShow({ actor, appointmentId: otherAppointmentId }),
+      isNotFound,
+    );
+    await assert.rejects(
+      () => markCompleted({ actor, appointmentId: otherAppointmentId }),
+      isNotFound,
+    );
+    const untouched = await repo.findAppointment(tenantB, otherAppointmentId);
+    assert.equal(untouched?.status, "CONFIRMED");
+  });
+
+  it("no ofrece profesionales para reprogramar un turno de otro negocio", async () => {
+    const listRescheduleProfessionals = createListRescheduleProfessionals(otherBusinessRepo());
+    await assert.rejects(
+      () =>
+        listRescheduleProfessionals({
+          actor,
+          appointmentId: otherAppointmentId,
+          localDate: "2026-08-25",
+          now: tuesdayMorning,
+        }),
+      isNotFound,
+    );
+  });
+
+  it("un turno de otro negocio no ocupa el hueco", async () => {
+    const listAvailableSlots = createListAvailableSlots(otherBusinessRepo());
+    const slots = await listAvailableSlots({
+      actor,
+      professionalId: professionalA,
+      serviceId: serviceA,
+      localDate: "2026-08-25",
+      now: tuesdayMorning,
+    });
+    assert.equal(slots.includes("10:00"), true);
+  });
+
+  it("el alta queda en el negocio del actor", async () => {
+    const repo = createMemoryAvailabilityRepository({ snapshot: snapshot() });
+    const createAppointment = createCreateAppointment(repo);
+    const created = await createAppointment({
+      actor,
+      professionalId: professionalA,
+      serviceId: serviceA,
+      clientId: clientA,
+      localDate: "2026-08-25",
+      localTime: "10:00",
+      now: tuesdayMorning,
+    });
+    assert.equal(await repo.findAppointment(tenantB, created.id), null);
+    const own = await repo.findAppointment(tenantA, created.id);
+    assert.equal(own?.localTime, "10:00");
   });
 });

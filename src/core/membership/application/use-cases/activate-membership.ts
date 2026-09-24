@@ -37,7 +37,7 @@ export function createActivateMembershipFromOrgEvent(repo: MembershipRepository)
     const existing = await repo.findMembership(tenant.id, user.id);
     if (existing) {
       if (invite) {
-        await repo.markInviteAccepted(invite.id);
+        await repo.markInviteAccepted(tenant.id, invite.id);
       }
       return existing;
     }
@@ -54,7 +54,7 @@ export function createActivateMembershipFromOrgEvent(repo: MembershipRepository)
       userId: user.id,
       role: invite.role,
     });
-    await repo.markInviteAccepted(invite.id);
+    await repo.markInviteAccepted(tenant.id, invite.id);
     return membership;
   };
 }
@@ -66,7 +66,7 @@ async function findPendingInvite(
   clerkInvitationId?: string | null,
 ): Promise<MembershipInviteRecord | null> {
   let invite = clerkInvitationId
-    ? await repo.findPendingInviteByClerkInvitationId(clerkInvitationId)
+    ? await repo.findPendingInviteByClerkInvitationId(tenantId, clerkInvitationId)
     : null;
   if (!invite) {
     invite = await repo.findPendingInviteByEmail(tenantId, email);

@@ -3,6 +3,7 @@ import "server-only";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@/generated/prisma/client";
 import { serverEnv } from "@/lib/env/server";
+import { createTenantDb } from "@/server/tenant-db";
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -23,6 +24,8 @@ function isCurrentClient(client: PrismaClient | undefined): client is PrismaClie
 }
 
 export const db = isCurrentClient(globalForPrisma.prisma) ? globalForPrisma.prisma : createClient();
+
+export const tenantDb = createTenantDb(db);
 
 if (serverEnv.NODE_ENV !== "production") {
   globalForPrisma.prisma = db;

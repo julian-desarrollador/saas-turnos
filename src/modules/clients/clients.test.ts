@@ -180,9 +180,34 @@ describe("findOrCreateClient", () => {
       (error: unknown) => error instanceof ClientsError && error.reason === "PHONE_INVALID",
     );
   });
+
+  it("no reutiliza la ficha del mismo teléfono en otro negocio", async () => {
+    const repo = createMemoryClientRepository([otherTenant]);
+    const findOrCreateClient = createFindOrCreateClient(repo);
+    const created = await findOrCreateClient({
+      actor: ownerA,
+      phone: "1112345678",
+      firstName: "Ana",
+    });
+    assert.equal(created.tenantId, tenantA);
+    assert.notEqual(created.id, otherId);
+    assert.equal(created.firstName, "Ana");
+    const untouched = await repo.findById(tenantB, otherId);
+    assert.equal(untouched?.firstName, "Lucía");
+    assert.equal(untouched?.lastName, "De otro negocio");
+  });
 });
 
 describe("listClients", () => {
+  it("no encuentra por teléfono la ficha de otro negocio", async () => {
+    const listClients = createListClients(createMemoryClientRepository([lucia, otherTenant]));
+    const { clients } = await listClients({ actor: ownerA, query: "1112345678" });
+    assert.deepEqual(
+      clients.map((row) => row.id),
+      [luciaId],
+    );
+  });
+
   it("lista solo el tenant del actor y ordena por apellido", async () => {
     const listClients = createListClients(
       createMemoryClientRepository([marco, lucia, otherTenant]),

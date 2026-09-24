@@ -1,4 +1,5 @@
 import type { PrismaClient } from "@/generated/prisma/client";
+import type { TenantDb } from "@/server/tenant-db";
 import type {
   CatalogRepositories,
   CreateProfessionalData,
@@ -59,43 +60,52 @@ function toService(row: ServiceRecord): ServiceRecord {
   return row;
 }
 
-export function createPrismaCatalogRepositories(db: PrismaClient): CatalogRepositories {
+export function createPrismaCatalogRepositories(
+  _db: PrismaClient,
+  tenantDb: TenantDb,
+): CatalogRepositories {
   return {
     branches: {
       async listByTenant(tenantId) {
-        const rows = await db.branch.findMany({
-          where: { tenantId, isActive: true },
-          select: { id: true, name: true },
-          orderBy: { name: "asc" },
-        });
-        return rows;
+        return tenantDb.run(tenantId, (tx) =>
+          tx.branch.findMany({
+            where: { tenantId, isActive: true },
+            select: { id: true, name: true },
+            orderBy: { name: "asc" },
+          }),
+        );
       },
       async findById(tenantId, id) {
-        const row = await db.branch.findFirst({
-          where: { tenantId, id, isActive: true },
-          select: { id: true, name: true },
-        });
-        return row;
+        return tenantDb.run(tenantId, (tx) =>
+          tx.branch.findFirst({
+            where: { tenantId, id, isActive: true },
+            select: { id: true, name: true },
+          }),
+        );
       },
     },
     professionals: {
       async listByTenant(tenantId) {
-        const rows = await db.professional.findMany({
-          where: { tenantId },
-          select: professionalSelect,
-          orderBy: { displayName: "asc" },
+        return tenantDb.run(tenantId, async (tx) => {
+          const rows = await tx.professional.findMany({
+            where: { tenantId },
+            select: professionalSelect,
+            orderBy: { displayName: "asc" },
+          });
+          return rows.map(toProfessional);
         });
-        return rows.map(toProfessional);
       },
       async findById(tenantId, id) {
-        const row = await db.professional.findFirst({
-          where: { tenantId, id },
-          select: professionalSelect,
+        return tenantDb.run(tenantId, async (tx) => {
+          const row = await tx.professional.findFirst({
+            where: { tenantId, id },
+            select: professionalSelect,
+          });
+          return row ? toProfessional(row) : null;
         });
-        return row ? toProfessional(row) : null;
       },
       async create(data: CreateProfessionalData) {
-        const row = await db.$transaction(async (tx) => {
+        const row = await tenantDb.run(data.tenantId, async (tx) => {
           const branch = await tx.branch.findFirst({
             where: { tenantId: data.tenantId, id: data.branchId },
             select: { id: true },
@@ -119,7 +129,7 @@ export function createPrismaCatalogRepositories(db: PrismaClient): CatalogReposi
         return toProfessional(row);
       },
       async update(tenantId, id, data: UpdateProfessionalData) {
-        return db.$transaction(async (tx) => {
+        return tenantDb.run(tenantId, async (tx) => {
           const existing = await tx.professional.findFirst({
             where: { tenantId, id },
             select: { id: true },
@@ -136,7 +146,7 @@ export function createPrismaCatalogRepositories(db: PrismaClient): CatalogReposi
         });
       },
       async setServices(tenantId, professionalId, serviceIds) {
-        return db.$transaction(async (tx) => {
+        return tenantDb.run(tenantId, async (tx) => {
           const professional = await tx.professional.findFirst({
             where: { tenantId, id: professionalId },
             select: { id: true },
@@ -159,6 +169,7 @@ export function createPrismaCatalogRepositories(db: PrismaClient): CatalogReposi
           if (serviceIds.length > 0) {
             await tx.professionalService.createMany({
               data: serviceIds.map((serviceId) => ({
+                tenantId,
                 professionalId,
                 serviceId,
               })),
@@ -175,29 +186,33 @@ export function createPrismaCatalogRepositories(db: PrismaClient): CatalogReposi
     },
     services: {
       async listByTenant(tenantId) {
-        const rows = await db.service.findMany({
-          where: { tenantId },
-          select: serviceSelect,
-          orderBy: { name: "asc" },
+        return tenantDb.run(tenantId, async (tx) => {
+          const rows = await tx.service.findMany({
+            where: { tenantId },
+            select: serviceSelect,
+            orderBy: { name: "asc" },
+          });
+          return rows.map(toService);
         });
-        return rows.map(toService);
       },
       async findById(tenantId, id) {
-        const row = await db.service.findFirst({
-          where: { tenantId, id },
-          select: serviceSelect,
-        });
-        return row;
+        return tenantDb.run(tenantId, (tx) =>
+          tx.service.findFirst({
+            where: { tenantId, id },
+            select: serviceSelect,
+          }),
+        );
       },
       async create(data: CreateServiceData) {
-        const row = await db.service.create({
-          data,
-          select: serviceSelect,
-        });
-        return row;
+        return tenantDb.run(data.tenantId, (tx) =>
+          tx.service.create({
+            data,
+            select: serviceSelect,
+          }),
+        );
       },
       async update(tenantId, id, data: UpdateServiceData) {
-        return db.$transaction(async (tx) => {
+        return tenantDb.run(tenantId, async (tx) => {
           const existing = await tx.service.findFirst({
             where: { tenantId, id },
             select: { id: true },

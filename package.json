@@ -24,6 +24,7 @@
     "db:reset": "prisma migrate reset",
     "db:seed": "tsx prisma/seed.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
+    "test:db": "node --import tsx --test src/server/tenant-db.db-test.ts",
     "prepare": "husky"
   },
   "lint-staged": {
