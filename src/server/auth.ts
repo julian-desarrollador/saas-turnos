@@ -5,37 +5,54 @@ import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import { isRole, type Role } from "@/core/authorization";
+import {
+  commercialAccess,
+  type CommercialAccess,
+  type SubscriptionStatus,
+} from "@/modules/billing/domain/subscription";
 import { db } from "@/server/db";
 
-const DEMO_TENANT_SLUG = "demo";
-
 export type TenantContext = {
-  tenant: { id: string; slug: string; name: string; timezone: string };
+  tenant: {
+    id: string;
+    slug: string;
+    name: string;
+    timezone: string;
+    access: CommercialAccess;
+    subscriptionStatus: SubscriptionStatus;
+    hasPaymentMethod: boolean;
+  };
   membership: { id: string; role: Role };
   user: { id: string; externalId: string; firstName: string | null };
 };
 
 export async function loadPlatformHome(): Promise<{
   signedIn: boolean;
-  canOpenDemo: boolean;
+  businesses: { slug: string; name: string }[];
 }> {
   const { userId } = await auth();
   if (!userId) {
-    return { signedIn: false, canOpenDemo: false };
+    return { signedIn: false, businesses: [] };
   }
 
-  const membership = await db.membership.findFirst({
+  const memberships = await db.membership.findMany({
     where: {
       user: { externalId: userId },
-      tenant: { slug: DEMO_TENANT_SLUG, isActive: true },
+      tenant: { isActive: true },
       isActive: true,
     },
-    select: { role: true },
+    include: { tenant: { select: { slug: true, name: true } } },
+    orderBy: { tenant: { name: "asc" } },
   });
 
   return {
     signedIn: true,
-    canOpenDemo: Boolean(membership && isRole(membership.role)),
+    businesses: memberships
+      .filter((membership) => isRole(membership.role))
+      .map((membership) => ({
+        slug: membership.tenant.slug,
+        name: membership.tenant.name,
+      })),
   };
 }
 
@@ -63,12 +80,25 @@ export const resolveTenantContext = cache(async (slug: string): Promise<TenantCo
     redirect("/" as never);
   }
 
+  const commercial = commercialAccess(
+    {
+      status: membership.tenant.subscriptionStatus,
+      trialEndsAt: membership.tenant.trialEndsAt,
+      graceEndsAt: membership.tenant.graceEndsAt,
+      periodEndsAt: membership.tenant.periodEndsAt,
+    },
+    new Date(),
+  );
+
   return {
     tenant: {
       id: membership.tenant.id,
       slug: membership.tenant.slug,
       name: membership.tenant.name,
       timezone: membership.tenant.timezone,
+      access: commercial.access,
+      subscriptionStatus: commercial.status,
+      hasPaymentMethod: Boolean(membership.tenant.providerSubscriptionId),
     },
     membership: {
       id: membership.id,

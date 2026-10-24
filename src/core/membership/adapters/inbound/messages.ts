@@ -11,6 +11,7 @@ const validationMessages: Record<MembershipValidationReason, string> = {
   ORGANIZATION_REQUIRED: "Este negocio todavía no tiene Organization en Clerk.",
   CLERK_FAILED:
     "No pudimos enviar la invitación. Revisá que Organizations esté habilitado en Clerk y reintentá.",
+  EMPLOYEE_LIMIT: "Este plan no admite más personas en el equipo.",
 };
 
 export function membershipValidationMessage(

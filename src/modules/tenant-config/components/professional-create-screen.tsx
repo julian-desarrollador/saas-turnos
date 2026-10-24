@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
@@ -26,7 +27,7 @@ export function ProfessionalCreateScreen({
   const [state, formAction, pending] = useActionState(createProfessionalAction, undefined);
   const [displayName, setDisplayName] = useState("");
 
-  const listHref = `/${slug}/professionals` as Route;
+  const listHref = `${panelPath(slug, "professionals")}` as Route;
   const onlyBranch = branches.length === 1 ? branches[0] : null;
 
   return (

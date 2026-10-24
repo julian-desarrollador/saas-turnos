@@ -14,6 +14,8 @@ import type {
   ReserveSlotResult,
   RescheduleSlotResult,
 } from "@/modules/booking/application/ports/availability-repository";
+import { PUBLIC_HORIZON_DAYS } from "@/modules/booking/domain/public-open-dates";
+import { addLocalDays, zonedCivilNow } from "@/modules/booking/domain/time";
 import {
   canCancelAppointment,
   canMarkCompleted,
@@ -283,6 +285,161 @@ export function createPrismaAvailabilityRepository(
   tenantDb: TenantDb,
 ): AvailabilityRepository {
   return {
+    async listOfferWindows(tenantId, serviceId, now) {
+      return tenantDb.run(tenantId, async (tx) => {
+        const tenant = await tx.tenant.findFirst({
+          where: { id: tenantId },
+          select: { timezone: true },
+        });
+        if (!tenant) {
+          return null;
+        }
+        const civil = zonedCivilNow(tenant.timezone, now);
+        const horizonEnd = addLocalDays(civil.localDate, PUBLIC_HORIZON_DAYS - 1);
+        const links = await tx.professionalService.findMany({
+          where: { tenantId, serviceId },
+          select: { professional: { select: { id: true, isActive: true, branchId: true } } },
+        });
+        const professionals = links.map((link) => link.professional);
+        const service = await tx.service.findFirst({
+          where: { tenantId, id: serviceId },
+          select: {
+            durationMinutes: true,
+            prepMinutes: true,
+            cleanupMinutes: true,
+            earliestStart: true,
+            latestStart: true,
+            isActive: true,
+          },
+        });
+        if (professionals.length === 0) {
+          return {
+            timezone: tenant.timezone,
+            service: service
+              ? {
+                  durationMinutes: service.durationMinutes,
+                  prepMinutes: service.prepMinutes,
+                  cleanupMinutes: service.cleanupMinutes,
+                  earliestStart: service.earliestStart,
+                  latestStart: service.latestStart,
+                  isActive: service.isActive,
+                }
+              : null,
+            occupations: [],
+            windows: [],
+          };
+        }
+        const professionalIds = professionals.map((professional) => professional.id);
+        const branchIds = [...new Set(professionals.map((professional) => professional.branchId))];
+        const [schedules, blocks, appointments] = await Promise.all([
+          tx.weeklySchedule.findMany({
+            where: {
+              tenantId,
+              OR: [
+                { professionalId: { in: professionalIds } },
+                { branchId: { in: branchIds }, professionalId: null },
+              ],
+            },
+            select: {
+              dayOfWeek: true,
+              startTime: true,
+              endTime: true,
+              capacity: true,
+              professionalId: true,
+              branchId: true,
+            },
+          }),
+          tx.calendarBlock.findMany({
+            where: {
+              tenantId,
+              OR: [
+                { professionalId: { in: professionalIds } },
+                { branchId: { in: branchIds }, professionalId: null },
+              ],
+            },
+            select: {
+              startDate: true,
+              endDate: true,
+              startTime: true,
+              endTime: true,
+              professionalId: true,
+              branchId: true,
+            },
+          }),
+          tx.appointment.findMany({
+            where: {
+              tenantId,
+              localDate: { gte: civil.localDate, lte: horizonEnd },
+              status: { notIn: ["CANCELLED", "NO_SHOW"] },
+              OR: [{ professionalId: { in: professionalIds } }, { branchId: { in: branchIds } }],
+            },
+            select: {
+              professionalId: true,
+              branchId: true,
+              localDate: true,
+              localTime: true,
+              durationMinutes: true,
+            },
+          }),
+        ]);
+        return {
+          timezone: tenant.timezone,
+          service: service
+            ? {
+                durationMinutes: service.durationMinutes,
+                prepMinutes: service.prepMinutes,
+                cleanupMinutes: service.cleanupMinutes,
+                earliestStart: service.earliestStart,
+                latestStart: service.latestStart,
+                isActive: service.isActive,
+              }
+            : null,
+          occupations: appointments.map((row) => ({
+            professionalId: row.professionalId,
+            branchId: row.branchId,
+            localDate: row.localDate,
+            localTime: row.localTime,
+            durationMinutes: row.durationMinutes,
+          })),
+          windows: professionals.map((professional) => ({
+            professionalId: professional.id,
+            branchId: professional.branchId,
+            isActive: professional.isActive,
+            professionalBands: schedules
+              .filter((row) => row.professionalId === professional.id)
+              .map((row) => ({
+                dayOfWeek: row.dayOfWeek,
+                startTime: row.startTime,
+                endTime: row.endTime,
+                capacity: row.capacity,
+              })),
+            branchBands: schedules
+              .filter(
+                (row) => row.branchId === professional.branchId && row.professionalId === null,
+              )
+              .map((row) => ({
+                dayOfWeek: row.dayOfWeek,
+                startTime: row.startTime,
+                endTime: row.endTime,
+                capacity: row.capacity,
+              })),
+            blocks: blocks
+              .filter(
+                (row) =>
+                  row.professionalId === professional.id ||
+                  (row.branchId === professional.branchId && row.professionalId === null),
+              )
+              .map((row) => ({
+                startDate: row.startDate,
+                endDate: row.endDate,
+                startTime: row.startTime,
+                endTime: row.endTime,
+                owner: row.professionalId ? ("professional" as const) : ("branch" as const),
+              })),
+          })),
+        };
+      });
+    },
     async listProfessionals(tenantId) {
       return tenantDb.run(tenantId, async (tx) => {
         const rows = await tx.professional.findMany({
@@ -434,6 +591,48 @@ export function createPrismaAvailabilityRepository(
         }));
       });
     },
+    async listDeviceAppointments(tenantId, deviceKey) {
+      if (!deviceKey) {
+        return [];
+      }
+      return tenantDb.run(tenantId, async (tx) => {
+        const rows = await tx.appointment.findMany({
+          where: { tenantId, publicDeviceHash: deviceKey, origin: "PUBLIC" },
+          orderBy: { startsAt: "asc" },
+          select: {
+            id: true,
+            localDate: true,
+            localTime: true,
+            startsAt: true,
+            status: true,
+            professionalId: true,
+            client: { select: { phone: true } },
+            professional: { select: { displayName: true } },
+            services: { select: { serviceId: true, serviceName: true }, take: 1 },
+          },
+        });
+        return rows.flatMap((row) => {
+          const service = row.services[0];
+          if (!service) {
+            return [];
+          }
+          return [
+            {
+              id: row.id,
+              localDate: row.localDate,
+              localTime: row.localTime,
+              startsAt: row.startsAt,
+              status: row.status,
+              professionalId: row.professionalId,
+              serviceId: service.serviceId,
+              serviceName: service.serviceName,
+              professionalName: row.professional.displayName,
+              clientPhone: row.client.phone,
+            },
+          ];
+        });
+      });
+    },
     async reserveSlot(input) {
       return tenantDb.run(input.tenantId, async (tx) => {
         const professional = await tx.professional.findFirst({
@@ -469,7 +668,8 @@ export function createPrismaAvailabilityRepository(
             professionalId: input.professionalId,
             clientId: input.clientId,
             status: "CONFIRMED",
-            origin: "PANEL",
+            origin: input.origin ?? "PANEL",
+            publicDeviceHash: input.publicDeviceHash ?? null,
             localDate: input.localDate,
             localTime: input.localTime,
             timezone: evaluation.timezone,

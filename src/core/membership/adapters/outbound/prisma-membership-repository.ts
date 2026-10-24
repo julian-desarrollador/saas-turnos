@@ -14,6 +14,7 @@ const tenantSelect = {
   slug: true,
   name: true,
   clerkOrganizationId: true,
+  employeeLimit: true,
 } as const;
 
 const userSelect = {
@@ -38,6 +39,7 @@ function toTenant(row: {
   slug: string;
   name: string;
   clerkOrganizationId: string | null;
+  employeeLimit: number;
 }): TenantOrgRecord {
   return row;
 }

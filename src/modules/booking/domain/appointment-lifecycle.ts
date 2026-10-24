@@ -1,4 +1,5 @@
 export const CANCELLED_BY_BUSINESS = "BUSINESS";
+export const CANCELLED_BY_CLIENT = "CLIENT";
 
 export function occupiesAgenda(status: string): boolean {
   return (

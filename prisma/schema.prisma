@@ -18,6 +18,14 @@ model Tenant {
   timezone            String   @db.VarChar(50)
   currency            String   @default("ARS") @db.VarChar(3)
   isActive            Boolean  @default(true) @map("is_active")
+  plan                PlanCode @default(INICIO)
+  subscriptionStatus  SubscriptionStatus @default(ACTIVE) @map("subscription_status")
+  trialEndsAt         DateTime? @map("trial_ends_at") @db.Timestamptz
+  graceEndsAt         DateTime? @map("grace_ends_at") @db.Timestamptz
+  periodEndsAt        DateTime? @map("period_ends_at") @db.Timestamptz
+  providerSubscriptionId String? @unique @map("provider_subscription_id") @db.VarChar(255)
+  employeeLimit       Int      @default(3) @map("employee_limit")
+  messageMonthlyCap   Int      @default(80) @map("message_monthly_cap")
   clerkOrganizationId String?  @unique @map("clerk_organization_id") @db.VarChar(255)
   createdAt           DateTime @default(now()) @map("created_at") @db.Timestamptz
   updatedAt           DateTime @updatedAt @map("updated_at") @db.Timestamptz
@@ -32,8 +40,60 @@ model Tenant {
   calendarBlocks      CalendarBlock[]
   clients             Client[]
   appointments        Appointment[]
+  notifications       Notification[]
+  site                TenantSite?
+  sitePhotos          TenantSitePhoto[]
 
   @@map("tenants")
+}
+
+model TenantSite {
+  tenantId   String  @id @map("tenant_id") @db.Uuid
+  headline   String  @default("") @db.VarChar(120)
+  about      String  @default("") @db.VarChar(1000)
+  brandColor String  @default("slate") @map("brand_color") @db.VarChar(20)
+  instagram  String? @db.VarChar(30)
+  published  Boolean @default(false)
+  logoKey    String? @map("logo_key") @db.VarChar(200)
+  coverKey   String? @map("cover_key") @db.VarChar(200)
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@map("tenant_sites")
+}
+
+model TenantSitePhoto {
+  id        String   @id @default(uuid()) @db.Uuid
+  tenantId  String   @map("tenant_id") @db.Uuid
+  key       String   @db.VarChar(200)
+  position  Int
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  tenant Tenant @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+
+  @@unique([tenantId, key])
+  @@index([tenantId, position])
+  @@map("tenant_site_photos")
+}
+
+enum PlanCode {
+  INICIO
+  NEGOCIO
+  EQUIPO
+
+  @@map("plan_code")
+}
+
+enum SubscriptionStatus {
+  TRIAL
+  ACTIVE
+  PAST_DUE
+  SUSPENDED
+  CANCELLED
+
+  @@map("subscription_status")
 }
 
 model Branch {
@@ -278,6 +338,7 @@ model Client {
   email       String? @db.VarChar(320)
   notes       String? @db.Text
   whatsappOptIn Boolean @default(true) @map("whatsapp_opt_in")
+  whatsappConsentAt DateTime? @map("whatsapp_consent_at") @db.Timestamptz
   isActive    Boolean @default(true) @map("is_active")
 
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
@@ -321,6 +382,7 @@ model Appointment {
   clientId       String            @map("client_id") @db.Uuid
   status         AppointmentStatus @default(PENDING)
   origin         AppointmentOrigin
+  publicDeviceHash String?          @map("public_device_hash") @db.VarChar(64)
 
   // ADR-005: hora local + zona horaria + instante UTC derivado
   localDate    String   @map("local_date") @db.VarChar(10)
@@ -341,7 +403,8 @@ model Appointment {
   professional Professional @relation(fields: [tenantId, professionalId], references: [tenantId, id], onDelete: Cascade)
   client       Client       @relation(fields: [tenantId, clientId], references: [tenantId, id], onDelete: Cascade)
 
-  services AppointmentService[]
+  services      AppointmentService[]
+  notifications Notification[]
 
   // Consulta principal: agenda de un profesional en un día
   @@index([tenantId, professionalId, localDate])
@@ -353,6 +416,7 @@ model Appointment {
   @@index([tenantId, startsAt])
   // Consulta por cliente
   @@index([tenantId, clientId])
+  @@index([tenantId, publicDeviceHash])
   @@unique([tenantId, id])
   @@map("appointments")
 }
@@ -373,4 +437,51 @@ model AppointmentService {
 
   @@index([tenantId])
   @@map("appointment_services")
+}
+
+enum NotificationKind {
+  CONFIRMATION
+  REMINDER
+
+  @@map("notification_kind")
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  CANCELLED
+  FAILED
+
+  @@map("notification_status")
+}
+
+model Notification {
+  id                String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tenantId          String             @map("tenant_id") @db.Uuid
+  appointmentId     String             @map("appointment_id") @db.Uuid
+  kind              NotificationKind
+  status            NotificationStatus @default(PENDING)
+  sendAt            DateTime           @map("send_at") @db.Timestamptz
+  idempotencyKey    String             @unique @map("idempotency_key") @db.VarChar(200)
+  attempts          Int                @default(0)
+  providerMessageId String?            @map("provider_message_id") @db.VarChar(255)
+  lastError         String?            @map("last_error") @db.VarChar(500)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamptz
+
+  tenant      Tenant      @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  appointment Appointment @relation(fields: [tenantId, appointmentId], references: [tenantId, id], onDelete: Cascade)
+
+  @@index([status, sendAt])
+  @@index([tenantId, appointmentId])
+  @@map("notifications")
+}
+
+// Idempotencia de webhooks de cobro. No tiene tenant_id: no entra en RLS.
+model ProcessedProviderEvent {
+  id         String   @id @db.VarChar(255)
+  receivedAt DateTime @default(now()) @map("received_at") @db.Timestamptz
+
+  @@map("processed_provider_events")
 }

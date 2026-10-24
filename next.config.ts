@@ -10,7 +10,23 @@ const securityHeaders = [
   { key: "X-Frame-Options", value: "SAMEORIGIN" },
 ];
 
+// Solo el dominio público del bucket de R2 y solo las carpetas de negocio
+// (docs/03-architecture.md §9). Sin la variable, no se acepta ninguna imagen remota.
+const siteImagesUrl = process.env.R2_PUBLIC_URL ? new URL(process.env.R2_PUBLIC_URL) : null;
+const remotePatterns = siteImagesUrl
+  ? [
+      {
+        protocol: siteImagesUrl.protocol === "http:" ? ("http" as const) : ("https" as const),
+        hostname: siteImagesUrl.hostname,
+        port: siteImagesUrl.port,
+        pathname: `${siteImagesUrl.pathname.replace(/\/+$/, "")}/tenants/**`,
+        search: "",
+      },
+    ]
+  : [];
+
 const nextConfig: NextConfig = {
+  images: { remotePatterns },
   // Sin esto, Next infiere la raíz buscando lockfiles hacia arriba y puede elegir
   // un directorio ajeno al proyecto.
   turbopack: { root: import.meta.dirname },

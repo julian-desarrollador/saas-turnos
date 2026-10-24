@@ -6,7 +6,12 @@ const errorMessages: Record<ClientsErrorReason, string> = {
   NAME_TOO_LONG: "El nombre no puede superar 100 caracteres.",
   QUERY_TOO_LONG: "La búsqueda es demasiado larga.",
   PHONE_TAKEN: "Ese WhatsApp ya es de otro cliente.",
+  PHONE_OWNER_MISMATCH: "Este número ya pertenece a un cliente.",
 };
+
+export function phoneOwnerMismatchMessage(ownerName: string): string {
+  return `Este número le pertenece a: ${ownerName}.`;
+}
 
 export function clientsValidationMessage(reason: ClientsErrorReason | undefined): string {
   if (!reason) {

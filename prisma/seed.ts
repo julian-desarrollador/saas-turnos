@@ -272,7 +272,7 @@ async function main() {
   console.log("  Weekly schedules: sucursal lun-sáb, Ana con capacidad 2 a la mañana");
 
   console.log("\nSeed completado. Entrá con el usuario de CLERK_DEV_USER_ID.");
-  console.log("Visita http://localhost:9700/demo/agenda");
+  console.log("Visita http://localhost:9700/demo/panel/agenda");
 }
 
 main()

@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import { CalendarClock, ChevronRight, TriangleAlert } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -40,8 +41,8 @@ export function ProfessionalEditScreen({
   const [displayName, setDisplayName] = useState(professional.displayName);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const listHref = `/${slug}/professionals` as Route;
-  const scheduleHref = `/${slug}/schedule/profesional/${professional.id}` as Route;
+  const listHref = `${panelPath(slug, "professionals")}` as Route;
+  const scheduleHref = `${panelPath(slug, `schedule/profesional/${professional.id}`)}` as Route;
   const nextActive = !professional.isActive;
 
   return (

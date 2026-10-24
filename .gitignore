@@ -6,7 +6,9 @@
 /out/
 /build
 
+/Precios de Planes
 *.md
+.env.example
 
 # testing
 /coverage

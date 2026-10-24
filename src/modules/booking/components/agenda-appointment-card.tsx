@@ -1,6 +1,7 @@
 import { CalendarClock, Check, FileText, Sparkles, User } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { panelPath } from "@/core/panel-routes";
 
 import { cn } from "@/lib/utils";
 import type { MonthAppointment } from "@/modules/booking/application/use-cases/list-month-agenda";
@@ -157,7 +158,7 @@ export function AgendaAppointmentCard({
       {canWrite && open ? (
         <div className="border-border border-t px-4 pt-3 pb-3.5">
           <Link
-            href={`/${slug}/agenda/${appointment.id}/reprogramar` as Route}
+            href={`${panelPath(slug, `agenda/${appointment.id}/reprogramar`)}` as Route}
             className="border-border bg-background hover:bg-muted flex h-11 w-full items-center justify-center gap-2 rounded-xl border-2 text-[15px] font-semibold transition active:scale-[0.99]"
           >
             <CalendarClock className="size-5 shrink-0" strokeWidth={2} />

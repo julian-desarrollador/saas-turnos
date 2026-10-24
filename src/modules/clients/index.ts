@@ -1,5 +1,5 @@
 export { createPrismaClientRepository } from "./adapters/outbound/prisma-client-repository";
-export { clientsValidationMessage } from "./adapters/inbound/messages";
+export { clientsValidationMessage, phoneOwnerMismatchMessage } from "./adapters/inbound/messages";
 export {
   loadClientsPage,
   loadClientFichaPage,

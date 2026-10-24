@@ -194,6 +194,35 @@ export function createMemoryAvailabilityRepository(seed: {
     async listProfessionals() {
       return allProfessionals();
     },
+    async listOfferWindows() {
+      const professional = seed.snapshot.professional;
+      return {
+        timezone: seed.snapshot.timezone,
+        service: seed.snapshot.service
+          ? {
+              durationMinutes: seed.snapshot.service.durationMinutes,
+              prepMinutes: seed.snapshot.service.prepMinutes,
+              cleanupMinutes: seed.snapshot.service.cleanupMinutes,
+              earliestStart: seed.snapshot.service.earliestStart,
+              latestStart: seed.snapshot.service.latestStart,
+              isActive: seed.snapshot.service.isActive,
+            }
+          : null,
+        occupations: [],
+        windows: professional
+          ? [
+              {
+                professionalId: professional.id,
+                branchId: professional.branchId,
+                isActive: professional.isActive,
+                professionalBands: seed.snapshot.professionalBands,
+                branchBands: seed.snapshot.branchBands,
+                blocks: seed.snapshot.blocks,
+              },
+            ]
+          : [],
+      };
+    },
     async listServices() {
       return seed.snapshot.service ? [{ ...seed.snapshot.service }] : [];
     },
@@ -276,6 +305,9 @@ export function createMemoryAvailabilityRepository(seed: {
           (left, right) =>
             left.startDate.localeCompare(right.startDate) || left.id.localeCompare(right.id),
         );
+    },
+    async listDeviceAppointments() {
+      return [];
     },
     async reserveSlot(input) {
       const evaluation = evaluateReservation(

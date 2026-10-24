@@ -1,9 +1,12 @@
 "use server";
 
+import { panelPath } from "@/core/panel-routes";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { ForbiddenError, hasPermission, type Role } from "@/core/authorization";
+import { fullAccessDenied } from "@/modules/billing/domain/subscription";
 import { createPrismaCatalogRepositories } from "@/modules/tenant-config/adapters/outbound/prisma-catalog-repository";
 import { createPrismaScheduleRepositories } from "@/modules/tenant-config/adapters/outbound/prisma-schedule-repository";
 import { TenantConfigError } from "@/modules/tenant-config/application/errors";
@@ -63,7 +66,17 @@ function actorFrom(ctx: { tenant: { id: string }; membership: { role: Role } }) 
   return { tenantId: ctx.tenant.id, role: ctx.membership.role };
 }
 
+class PanelAccessError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "PanelAccessError";
+  }
+}
+
 function toActionState(error: unknown): ActionState {
+  if (error instanceof PanelAccessError) {
+    return { ok: false, message: error.message };
+  }
   if (error instanceof ForbiddenError) {
     return { ok: false, message: "No tenés permiso para esta acción." };
   }
@@ -149,23 +162,32 @@ async function actorForSlug(slug: string) {
   return { ctx, actor: actorFrom(ctx) };
 }
 
+async function actorForWrite(slug: string) {
+  const loaded = await actorForSlug(slug);
+  const denied = fullAccessDenied(loaded.ctx.tenant.access);
+  if (denied) {
+    throw new PanelAccessError(denied);
+  }
+  return loaded;
+}
+
 function readServiceIds(formData: FormData): string[] {
   return formData.getAll("serviceId").filter((value): value is string => typeof value === "string");
 }
 
 function teamHref(slug: string, query: Record<string, string>): string {
   const params = new URLSearchParams(query);
-  return `/${slug}/professionals?${params.toString()}`;
+  return `${panelPath(slug, `professionals?${params.toString()}`)}`;
 }
 
 function scheduleHref(slug: string, query: Record<string, string>): string {
   const params = new URLSearchParams(query);
-  return `/${slug}/schedule?${params.toString()}`;
+  return `${panelPath(slug, `schedule?${params.toString()}`)}`;
 }
 
 function servicesHref(slug: string, query: Record<string, string>): string {
   const params = new URLSearchParams(query);
-  return `/${slug}/services?${params.toString()}`;
+  return `${panelPath(slug, `services?${params.toString()}`)}`;
 }
 
 export async function loadProfessionalsPage(slug: string) {
@@ -256,7 +278,7 @@ export async function createProfessionalAction(
   const displayName = readString(formData, "displayName");
 
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     const created = await createProfessional({
       actor,
       displayName,
@@ -271,7 +293,7 @@ export async function createProfessionalAction(
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
   redirect(teamHref(slug, { created: "1", who: displayName }) as never);
 }
 
@@ -285,7 +307,7 @@ export async function saveProfessionalAction(
 
   let saved;
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     saved = await updateProfessional({
       actor,
       professionalId,
@@ -300,8 +322,8 @@ export async function saveProfessionalAction(
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/professionals`);
-  revalidatePath(`/${slug}/professionals/${professionalId}`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
+  revalidatePath(`${panelPath(slug, `professionals/${professionalId}`)}`);
   redirect(teamHref(slug, { saved: "1", who: saved.displayName }) as never);
 }
 
@@ -315,14 +337,14 @@ export async function setProfessionalActiveAction(
 
   let updated;
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     updated = await updateProfessional({ actor, professionalId, isActive });
   } catch (error) {
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/professionals`);
-  revalidatePath(`/${slug}/professionals/${professionalId}`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
+  revalidatePath(`${panelPath(slug, `professionals/${professionalId}`)}`);
   redirect(
     teamHref(slug, {
       [isActive ? "activated" : "deactivated"]: "1",
@@ -339,7 +361,7 @@ export async function createServiceAction(
   const name = readString(formData, "name");
 
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     await createService({
       actor,
       name,
@@ -355,8 +377,8 @@ export async function createServiceAction(
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/services`);
-  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`${panelPath(slug, "services")}`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
   redirect(servicesHref(slug, { created: "1", who: name }) as never);
 }
 
@@ -369,7 +391,7 @@ export async function saveServiceAction(
 
   let saved;
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     saved = await updateService({
       actor,
       serviceId,
@@ -385,9 +407,9 @@ export async function saveServiceAction(
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/services`);
-  revalidatePath(`/${slug}/services/${serviceId}`);
-  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`${panelPath(slug, "services")}`);
+  revalidatePath(`${panelPath(slug, `services/${serviceId}`)}`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
   redirect(servicesHref(slug, { saved: "1", who: saved.name }) as never);
 }
 
@@ -401,15 +423,15 @@ export async function setServiceActiveAction(
 
   let updated;
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     updated = await updateService({ actor, serviceId, isActive });
   } catch (error) {
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/services`);
-  revalidatePath(`/${slug}/services/${serviceId}`);
-  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`${panelPath(slug, "services")}`);
+  revalidatePath(`${panelPath(slug, `services/${serviceId}`)}`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
   redirect(
     servicesHref(slug, {
       [isActive ? "activated" : "deactivated"]: "1",
@@ -498,7 +520,7 @@ export async function setWeeklyScheduleAction(
   const ownerName = readString(formData, "ownerName");
 
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     await setWeeklySchedule({
       actor,
       owner: readOwner(formData),
@@ -508,8 +530,8 @@ export async function setWeeklyScheduleAction(
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/schedule`);
-  revalidatePath(`/${slug}/professionals`);
+  revalidatePath(`${panelPath(slug, "schedule")}`);
+  revalidatePath(`${panelPath(slug, "professionals")}`);
   redirect(scheduleHref(slug, { saved: "1", who: ownerName }) as never);
 }
 
@@ -519,7 +541,7 @@ export async function createCalendarBlockAction(
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     await createCalendarBlock({
       actor,
       owner: readOwner(formData),
@@ -529,8 +551,8 @@ export async function createCalendarBlockAction(
       endTime: readTime(formData, "endTime"),
       reason: readOptionalString(formData, "reason"),
     });
-    revalidatePath(`/${slug}/agenda`);
-    revalidatePath(`/${slug}/agenda/bloquear`);
+    revalidatePath(`${panelPath(slug, "agenda")}`);
+    revalidatePath(`${panelPath(slug, "agenda/bloquear")}`);
     return { ok: true };
   } catch (error) {
     return toActionState(error);
@@ -543,13 +565,13 @@ export async function deleteCalendarBlockAction(
 ): Promise<ActionState> {
   const slug = readString(formData, "slug");
   try {
-    const { actor } = await actorForSlug(slug);
+    const { actor } = await actorForWrite(slug);
     await deleteCalendarBlock({
       actor,
       blockId: readString(formData, "blockId"),
     });
-    revalidatePath(`/${slug}/agenda`);
-    revalidatePath(`/${slug}/agenda/bloquear`);
+    revalidatePath(`${panelPath(slug, "agenda")}`);
+    revalidatePath(`${panelPath(slug, "agenda/bloquear")}`);
     return { ok: true };
   } catch (error) {
     return toActionState(error);

@@ -120,6 +120,19 @@ export type AppointmentDetail = AppointmentRecord & {
   clientPhone: string;
 };
 
+export type DeviceAppointmentRecord = {
+  id: string;
+  localDate: string;
+  localTime: string;
+  startsAt: Date;
+  status: string;
+  professionalId: string;
+  serviceId: string;
+  serviceName: string;
+  professionalName: string;
+  clientPhone: string;
+};
+
 export type ReserveSlotInput = {
   tenantId: string;
   professionalId: string;
@@ -128,6 +141,8 @@ export type ReserveSlotInput = {
   localDate: string;
   localTime: string;
   now: Date;
+  origin?: "PANEL" | "PUBLIC";
+  publicDeviceHash?: string | null;
 };
 
 export type ReserveSlotResult =
@@ -173,8 +188,40 @@ export type RescheduleSlotResult =
   | { status: "inactive" }
   | { status: "unavailable" };
 
+export type OfferServiceTiming = {
+  durationMinutes: number;
+  prepMinutes: number;
+  cleanupMinutes: number;
+  earliestStart: string | null;
+  latestStart: string | null;
+  isActive: boolean;
+};
+
+export type OfferOccupation = {
+  professionalId: string;
+  branchId: string;
+  localDate: string;
+  localTime: string;
+  durationMinutes: number;
+};
+
+export type OfferWindows = {
+  timezone: string;
+  service: OfferServiceTiming | null;
+  occupations: OfferOccupation[];
+  windows: {
+    professionalId: string;
+    branchId: string;
+    isActive: boolean;
+    professionalBands: ScheduleBand[];
+    branchBands: ScheduleBand[];
+    blocks: CalendarBlockWindow[];
+  }[];
+};
+
 export type AvailabilityRepository = {
   listProfessionals(tenantId: string): Promise<AgendaProfessional[]>;
+  listOfferWindows(tenantId: string, serviceId: string, now: Date): Promise<OfferWindows | null>;
   listServices(tenantId: string): Promise<AgendaService[]>;
   loadSnapshot(
     tenantId: string,
@@ -195,6 +242,7 @@ export type AvailabilityRepository = {
     toDate: string,
   ): Promise<MonthAppointmentRecord[]>;
   listMonthBlocks(tenantId: string, fromDate: string, toDate: string): Promise<MonthBlockRecord[]>;
+  listDeviceAppointments(tenantId: string, deviceKey: string): Promise<DeviceAppointmentRecord[]>;
   reserveSlot(input: ReserveSlotInput): Promise<ReserveSlotResult>;
   rescheduleSlot(input: RescheduleSlotInput): Promise<RescheduleSlotResult>;
   cancelAppointment(

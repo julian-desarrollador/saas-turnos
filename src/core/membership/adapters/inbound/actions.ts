@@ -1,9 +1,12 @@
 "use server";
 
+import { panelPath } from "@/core/panel-routes";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { ForbiddenError, hasPermission } from "@/core/authorization";
+import { fullAccessDenied } from "@/modules/billing/domain/subscription";
 import { membershipValidationMessage } from "@/core/membership/adapters/inbound/messages";
 import { createPrismaMembershipRepository } from "@/core/membership/adapters/outbound/prisma-membership-repository";
 import { MembershipError } from "@/core/membership/application/errors";
@@ -64,7 +67,7 @@ export async function loadMembersPage(slug: string) {
   const ctx = await resolveTenantContext(slug);
   const actor = actorFrom(ctx);
   if (!hasPermission(actor.role, "members.read")) {
-    redirect(`/${slug}/agenda` as never);
+    redirect(`${panelPath(slug, "agenda")}` as never);
   }
 
   const { listMembers, listPendingInvites } = membershipApp();
@@ -87,6 +90,10 @@ export async function inviteMemberAction(
 
   try {
     const ctx = await resolveTenantContext(slug);
+    const denied = fullAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     const { inviteMember } = membershipApp();
     await inviteMember({
       actor: actorFrom(ctx),
@@ -97,7 +104,7 @@ export async function inviteMemberAction(
     return toActionState(error);
   }
 
-  revalidatePath(`/${slug}/members`);
+  revalidatePath(`${panelPath(slug, "members")}`);
   const params = new URLSearchParams({ invited: "1", who: email });
-  redirect(`/${slug}/members?${params.toString()}` as never);
+  redirect(`${panelPath(slug, `members?${params.toString()}`)}` as never);
 }

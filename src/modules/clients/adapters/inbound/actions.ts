@@ -1,9 +1,12 @@
 "use server";
 
+import { panelPath } from "@/core/panel-routes";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { ForbiddenError, hasPermission, type Role } from "@/core/authorization";
+import { fullAccessDenied } from "@/modules/billing/domain/subscription";
 import { createPrismaClientRepository } from "@/modules/clients/adapters/outbound/prisma-client-repository";
 import { ClientsError } from "@/modules/clients/application/errors";
 import { CLIENT_APPOINTMENT_LIMIT, CLIENT_LIST_LIMIT } from "@/modules/clients/application/search";
@@ -140,7 +143,11 @@ export async function saveClientFichaAction(
   const date = readString(formData, "date");
 
   try {
-    const { actor } = await actorForSlug(slug);
+    const { ctx, actor } = await actorForSlug(slug);
+    const denied = fullAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     await updateClientFicha({
       actor,
       clientId,
@@ -151,9 +158,9 @@ export async function saveClientFichaAction(
     return toFichaActionState(error);
   }
 
-  revalidatePath(`/${slug}/clients`);
-  revalidatePath(`/${slug}/clients/${clientId}`);
-  revalidatePath(`/${slug}/agenda`);
+  revalidatePath(`${panelPath(slug, "clients")}`);
+  revalidatePath(`${panelPath(slug, `clients/${clientId}`)}`);
+  revalidatePath(`${panelPath(slug, "agenda")}`);
   redirect(
     clientFichaHref(slug, clientId, {
       from,

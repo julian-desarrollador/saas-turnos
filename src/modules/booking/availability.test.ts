@@ -227,6 +227,14 @@ describe("listAvailableSlots", () => {
       async listProfessionals() {
         return [];
       },
+      async listOfferWindows() {
+        return {
+          timezone: "America/Argentina/Buenos_Aires",
+          service: null,
+          occupations: [],
+          windows: [],
+        };
+      },
       async listServices() {
         return [];
       },
@@ -264,6 +272,9 @@ describe("listAvailableSlots", () => {
       },
       async findAppointment() {
         return null;
+      },
+      async listDeviceAppointments() {
+        return [];
       },
       async reserveSlot() {
         throw new Error("reserveSlot is not used in these tests");

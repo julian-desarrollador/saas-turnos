@@ -20,7 +20,17 @@ export type TenantConfigValidationReason =
   | "DATE_RANGE_INVALID"
   | "BLOCK_TIME_INCOMPLETE"
   | "BLOCKS_OVERLAP"
-  | "REASON_TOO_LONG";
+  | "REASON_TOO_LONG"
+  | "HEADLINE_TOO_LONG"
+  | "ABOUT_TOO_LONG"
+  | "BRAND_COLOR_INVALID"
+  | "INSTAGRAM_INVALID"
+  | "IMAGE_KIND_INVALID"
+  | "IMAGE_TYPE_INVALID"
+  | "IMAGE_TOO_LARGE"
+  | "IMAGE_KEY_INVALID"
+  | "IMAGE_NOT_UPLOADED"
+  | "GALLERY_FULL";
 
 export class TenantConfigError extends Error {
   readonly code: TenantConfigErrorCode;

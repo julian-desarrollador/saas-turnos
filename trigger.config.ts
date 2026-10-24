@@ -1,0 +1,16 @@
+import { defineConfig } from "@trigger.dev/sdk";
+
+export default defineConfig({
+  project: process.env["TRIGGER_PROJECT_REF"] ?? "proj_pendiente",
+  dirs: ["./trigger"],
+  maxDuration: 60,
+  retries: {
+    enabledInDev: false,
+    default: {
+      maxAttempts: 1,
+      minTimeoutInMs: 1000,
+      maxTimeoutInMs: 10000,
+      factor: 2,
+    },
+  },
+});

@@ -1,3 +1,4 @@
+import { panelPath } from "@/core/panel-routes";
 const LOCAL_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
 
 function isLocalDate(value: string): boolean {
@@ -27,9 +28,9 @@ export function clientFichaBackHref(
   if (fromAgenda(from, date) && date) {
     const params = new URLSearchParams();
     params.set("date", date);
-    return `/${slug}/agenda?${params.toString()}`;
+    return `${panelPath(slug, `agenda?${params.toString()}`)}`;
   }
-  return `/${slug}/clients`;
+  return `${panelPath(slug, "clients")}`;
 }
 
 export function clientFichaBackAriaLabel(from?: string | null, date?: string | null): string {
@@ -50,7 +51,9 @@ export function clientFichaHref(
     params.set("saved", "1");
   }
   const search = params.toString();
-  return search ? `/${slug}/clients/${clientId}?${search}` : `/${slug}/clients/${clientId}`;
+  return search
+    ? `${panelPath(slug, `clients/${clientId}?${search}`)}`
+    : `${panelPath(slug, `clients/${clientId}`)}`;
 }
 
 /** Enlace a la ficha desde un turno, para volver al mismo día. */

@@ -13,6 +13,8 @@ export const permissions = [
   "clients.write",
   "members.read",
   "members.invite",
+  "billing.manage",
+  "site.write",
 ] as const;
 export type Permission = (typeof permissions)[number];
 
@@ -29,6 +31,8 @@ const rolePermissions: Record<Role, readonly Permission[]> = {
     "clients.write",
     "members.read",
     "members.invite",
+    "billing.manage",
+    "site.write",
   ],
   ADMIN: [
     "catalog.read",
@@ -42,6 +46,7 @@ const rolePermissions: Record<Role, readonly Permission[]> = {
     "clients.write",
     "members.read",
     "members.invite",
+    "site.write",
   ],
   PROFESSIONAL: [
     "catalog.read",

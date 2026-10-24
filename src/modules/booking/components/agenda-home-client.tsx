@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import { Lock, Plus } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
@@ -155,8 +156,9 @@ export function AgendaHomeClient({
     loadMonth(shiftYearMonth(yearMonth, 1), selectedDate);
   }
 
-  const addHref = `/${slug}/agenda/nuevo?date=${encodeURIComponent(selectedDate)}` as Route;
-  const blockHref = `/${slug}/agenda/bloquear` as Route;
+  const addHref =
+    `${panelPath(slug, `agenda/nuevo?date=${encodeURIComponent(selectedDate)}`)}` as Route;
+  const blockHref = `${panelPath(slug, "agenda/bloquear")}` as Route;
 
   return (
     <main className="mx-auto max-w-md space-y-5 px-4 py-6">

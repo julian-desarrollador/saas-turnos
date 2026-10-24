@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
@@ -14,7 +15,7 @@ export function ServiceCreateScreen({ slug }: { slug: string }) {
   const [state, formAction, pending] = useActionState(createServiceAction, undefined);
   const [name, setName] = useState("");
 
-  const listHref = `/${slug}/services` as Route;
+  const listHref = `${panelPath(slug, "services")}` as Route;
 
   return (
     <PanelFormShell

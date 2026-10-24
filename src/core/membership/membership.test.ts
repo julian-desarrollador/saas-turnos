@@ -234,6 +234,115 @@ describe("activateMembershipFromOrgEvent", () => {
   });
 });
 
+describe("inviteMember límite de plan", () => {
+  it("no cuenta los empleados de otro negocio", async () => {
+    const repo = createMemoryMembershipRepository({
+      tenants: [
+        {
+          id: tenantA,
+          slug: "demo",
+          name: "Peluquería Demo",
+          clerkOrganizationId: "org_demo",
+          employeeLimit: 2,
+        },
+        {
+          id: tenantB,
+          slug: "otro",
+          name: "Otro",
+          clerkOrganizationId: "org_other",
+          employeeLimit: 1,
+        },
+      ],
+      users: [
+        {
+          id: ownerUserId,
+          externalId: "user_owner",
+          email: "owner@demo.local",
+          firstName: "Dev",
+          lastName: "Owner",
+        },
+        {
+          id: inviteeUserId,
+          externalId: "user_invitee",
+          email: "recepcion@demo.local",
+          firstName: "Lu",
+          lastName: "Recepción",
+        },
+        {
+          id: "66666666-6666-6666-6666-666666666666",
+          externalId: "user_other",
+          email: "secreto@otro.local",
+          firstName: "Otro",
+          lastName: "Dueño",
+        },
+      ],
+      members: [
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          tenantId: tenantA,
+          userId: ownerUserId,
+          role: "OWNER",
+          isActive: true,
+        },
+        {
+          id: "77777777-7777-7777-7777-777777777777",
+          tenantId: tenantB,
+          userId: "66666666-6666-6666-6666-666666666666",
+          role: "OWNER",
+          isActive: true,
+        },
+      ],
+    });
+    const invite = await createInviteMember(
+      repo,
+      createMemoryClerkGateway(emptyClerkCalls()),
+      "http://localhost:9700",
+    )({ actor: ownerA, email: "recepcion@demo.local", role: "RECEPTION" });
+    assert.equal(invite.tenantId, tenantA);
+  });
+
+  it("rechaza invitar cuando el plan ya está lleno", async () => {
+    const limited = createMemoryMembershipRepository({
+      tenants: [
+        {
+          id: tenantA,
+          slug: "demo",
+          name: "Peluquería Demo",
+          clerkOrganizationId: "org_demo",
+          employeeLimit: 1,
+        },
+      ],
+      users: [
+        {
+          id: ownerUserId,
+          externalId: "user_owner",
+          email: "owner@demo.local",
+          firstName: "Dev",
+          lastName: "Owner",
+        },
+      ],
+      members: [
+        {
+          id: "33333333-3333-3333-3333-333333333333",
+          tenantId: tenantA,
+          userId: ownerUserId,
+          role: "OWNER",
+          isActive: true,
+        },
+      ],
+    });
+    await assert.rejects(
+      () =>
+        createInviteMember(
+          limited,
+          createMemoryClerkGateway(emptyClerkCalls()),
+          "http://localhost:9700",
+        )({ actor: ownerA, email: "nueva@demo.local", role: "RECEPTION" }),
+      (error: unknown) => error instanceof MembershipError && error.reason === "EMPLOYEE_LIMIT",
+    );
+  });
+});
+
 describe("listMembers", () => {
   it("no lista miembros de otro negocio", async () => {
     const otherUserId = "66666666-6666-6666-6666-666666666666";

@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
@@ -21,7 +22,7 @@ export function InviteMemberScreen({ slug }: { slug: string }) {
   const [email, setEmail] = useState("");
   const [role, setRole] = useState<InvitableRole>("RECEPTION");
 
-  const listHref = `/${slug}/members` as Route;
+  const listHref = `${panelPath(slug, "members")}` as Route;
 
   return (
     <PanelFormShell

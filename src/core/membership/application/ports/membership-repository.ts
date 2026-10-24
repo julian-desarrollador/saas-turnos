@@ -37,6 +37,7 @@ export type TenantOrgRecord = {
   slug: string;
   name: string;
   clerkOrganizationId: string | null;
+  employeeLimit?: number;
 };
 
 export type MembershipRepository = {

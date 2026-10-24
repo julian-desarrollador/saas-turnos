@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { panelPath } from "@/core/panel-routes";
 
 import type { DayAppointment } from "@/modules/booking/application/use-cases/list-day-appointments";
 import { AgendaCancelForm } from "@/modules/booking/components/agenda-cancel-form";
@@ -83,7 +84,7 @@ export function AgendaDayAppointments({
                   appointmentId={appointment.id}
                 />
                 <Link
-                  href={`/${slug}/agenda/${appointment.id}/reprogramar` as Route}
+                  href={`${panelPath(slug, `agenda/${appointment.id}/reprogramar`)}` as Route}
                   className="bg-secondary text-secondary-foreground hover:bg-secondary/80 inline-flex h-10 min-h-10 items-center rounded-lg px-2.5 text-sm font-medium"
                 >
                   Reprogramar

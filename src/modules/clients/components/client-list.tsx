@@ -1,6 +1,7 @@
 import { User } from "lucide-react";
 import type { Route } from "next";
 import Link from "next/link";
+import { panelPath } from "@/core/panel-routes";
 
 import { clientDisplayName } from "@/modules/clients/adapters/inbound/messages";
 import type { ClientListItem } from "@/modules/clients/application/use-cases/list-clients";
@@ -32,7 +33,7 @@ export function ClientList({ slug, clients }: { slug: string; clients: ClientLis
         return (
           <li key={client.id}>
             <Link
-              href={`/${slug}/clients/${client.id}` as Route}
+              href={`${panelPath(slug, `clients/${client.id}`)}` as Route}
               className="border-border bg-card hover:border-primary/25 flex items-center gap-4 rounded-[24px] border px-4 py-4 shadow-[0_4px_20px_rgba(0,0,0,0.05)] transition active:scale-[0.99]"
             >
               <span className="bg-muted text-primary flex size-12 shrink-0 items-center justify-center rounded-2xl">

@@ -6,7 +6,8 @@ export type MembershipValidationReason =
   | "INVITE_ALREADY_PENDING"
   | "ALREADY_MEMBER"
   | "ORGANIZATION_REQUIRED"
-  | "CLERK_FAILED";
+  | "CLERK_FAILED"
+  | "EMPLOYEE_LIMIT";
 
 export class MembershipError extends Error {
   readonly code: MembershipErrorCode;

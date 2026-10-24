@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import { Trash2 } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -13,6 +14,7 @@ import { cn } from "@/lib/utils";
 import {
   createAppointmentAction,
   fetchAvailableSlotsAction,
+  previewClientPhoneAction,
   type ActionState,
 } from "@/modules/booking/adapters/inbound/actions";
 import { emptySlotsMessage } from "@/modules/booking/adapters/inbound/messages";
@@ -76,6 +78,10 @@ export function AgendaNuevoWizard({
   const [selectedTime, setSelectedTime] = useState("");
   const [phone, setPhone] = useState("");
   const [firstName, setFirstName] = useState("");
+  const [acceptExisting, setAcceptExisting] = useState(false);
+  const [phoneOwner, setPhoneOwner] = useState<string | null>(null);
+  const [phoneOwnerMessage, setPhoneOwnerMessage] = useState<string | undefined>();
+  const [clientCheckPending, startClientCheck] = useTransition();
   const [slots, setSlots] = useState<string[] | null>(null);
   const [emptyReason, setEmptyReason] = useState<EmptySlotsReason | null>(null);
   const [slotsError, setSlotsError] = useState<string | undefined>();
@@ -86,7 +92,7 @@ export function AgendaNuevoWizard({
   );
 
   const closeHref =
-    `/${slug}/agenda?date=${encodeURIComponent(selectedDate || initialDate)}` as Route;
+    `${panelPath(slug, `agenda?date=${encodeURIComponent(selectedDate || initialDate)}`)}` as Route;
 
   const professional = professionals.find((item) => item.id === professionalId) ?? null;
   const offeredServices = useMemo(() => {
@@ -216,7 +222,19 @@ export function AgendaNuevoWizard({
       return;
     }
     if (step === 5 && clientOk) {
-      setStep(6);
+      startClientCheck(async () => {
+        const preview = await previewClientPhoneAction(slug, phone, firstName);
+        if (preview.phoneOwner || preview.message) {
+          setAcceptExisting(false);
+          setPhoneOwner(preview.phoneOwner);
+          setPhoneOwnerMessage(preview.message);
+          return;
+        }
+        setAcceptExisting(false);
+        setPhoneOwner(null);
+        setPhoneOwnerMessage(undefined);
+        setStep(6);
+      });
       return;
     }
     if (step === 6) {
@@ -251,17 +269,19 @@ export function AgendaNuevoWizard({
     (step === 2 && serviceIds.length === 0) ||
     (step === 3 && !dateIsBookable) ||
     (step === 4 && !noAvailableSlots && !selectedTime) ||
-    (step === 5 && !clientOk) ||
+    (step === 5 && (!clientOk || clientCheckPending)) ||
     (step === 6 && (!clientOk || !selectedTime || !dateIsBookable || confirmPending || !canWrite));
 
   const continueLabel =
     step === 4 && noAvailableSlots
       ? "Cambiar fecha"
-      : step === 6
-        ? confirmPending
-          ? "Confirmando…"
-          : "Confirmar turno"
-        : "Continuar";
+      : step === 5 && clientCheckPending
+        ? "Revisando…"
+        : step === 6
+          ? confirmPending
+            ? "Confirmando…"
+            : "Confirmar turno"
+          : "Continuar";
 
   const summary =
     step === 1 ? (
@@ -339,7 +359,7 @@ export function AgendaNuevoWizard({
       continueLabel={continueLabel}
       onContinue={handleContinue}
       continueDisabled={continueDisabled}
-      continueLoading={confirmPending && step === 6}
+      continueLoading={(confirmPending && step === 6) || (clientCheckPending && step === 5)}
     >
       {step === 1 ? (
         <ul className="grid gap-3">
@@ -452,7 +472,12 @@ export function AgendaNuevoWizard({
               type="tel"
               autoComplete="tel"
               value={phone}
-              onChange={(event) => setPhone(event.target.value)}
+              onChange={(event) => {
+                setPhone(event.target.value);
+                setAcceptExisting(false);
+                setPhoneOwner(null);
+                setPhoneOwnerMessage(undefined);
+              }}
               placeholder="+54 9 11 2345-6789"
               className="h-12 rounded-xl text-base"
             />
@@ -472,11 +497,31 @@ export function AgendaNuevoWizard({
               maxLength={100}
               autoComplete="given-name"
               value={firstName}
-              onChange={(event) => setFirstName(event.target.value)}
+              onChange={(event) => {
+                setFirstName(event.target.value);
+                setAcceptExisting(false);
+                setPhoneOwner(null);
+                setPhoneOwnerMessage(undefined);
+              }}
               placeholder="Como figura en el turno"
               className="h-12 rounded-xl text-base"
             />
           </div>
+          {phoneOwnerMessage ? (
+            <p className="text-destructive text-sm">{phoneOwnerMessage}</p>
+          ) : null}
+          {phoneOwner ? (
+            <button
+              type="button"
+              onClick={() => {
+                setAcceptExisting(true);
+                setStep(6);
+              }}
+              className="border-border bg-background hover:bg-muted w-full cursor-pointer rounded-[30px] border py-4 text-base font-semibold"
+            >
+              Guardar el turno para {phoneOwner}
+            </button>
+          ) : null}
         </div>
       ) : null}
 
@@ -489,6 +534,7 @@ export function AgendaNuevoWizard({
           <input type="hidden" name="time" value={selectedTime} />
           <input type="hidden" name="phone" value={phone} />
           <input type="hidden" name="firstName" value={firstName} />
+          {acceptExisting ? <input type="hidden" name="acceptExisting" value="1" /> : null}
 
           <div className="bg-muted/60 grid gap-3 rounded-2xl px-4 py-4 text-sm">
             <SummaryRow label="Profesional" value={professional?.displayName ?? "—"} />
@@ -508,7 +554,12 @@ export function AgendaNuevoWizard({
             <SummaryRow
               label="Contacto"
               value={
-                [firstName.trim() || null, phone.trim() || null].filter(Boolean).join(" · ") || "—"
+                [
+                  acceptExisting && phoneOwner ? phoneOwner : firstName.trim() || null,
+                  phone.trim() || null,
+                ]
+                  .filter(Boolean)
+                  .join(" · ") || "—"
               }
             />
           </div>

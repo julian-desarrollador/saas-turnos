@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
@@ -108,7 +109,7 @@ export function WeeklyScheduleScreen({
   });
   const [draftsByDay, setDraftsByDay] = useState(() => draftsFromSlots(slots));
 
-  const listHref = `/${slug}/schedule` as Route;
+  const listHref = `${panelPath(slug, "schedule")}` as Route;
   const subtitle =
     ownerKind === "branch"
       ? "Marcá los días que abre el local y a qué hora."

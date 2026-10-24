@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
+import { panelPath } from "@/core/panel-routes";
 import {
   branchScheduleCards,
   capacityQuestion,
@@ -90,8 +91,14 @@ describe("schedule view", () => {
     );
 
     assert.equal(cards[0]?.weekLabel, "Lun · 09:00–18:00");
-    assert.equal(scheduleOwnerHref("demo", "branch", "b1"), "/demo/schedule/sucursal/b1");
-    assert.equal(scheduleOwnerHref("demo", "professional", "p1"), "/demo/schedule/profesional/p1");
+    assert.equal(
+      scheduleOwnerHref("demo", "branch", "b1"),
+      panelPath("demo", "schedule/sucursal/b1"),
+    );
+    assert.equal(
+      scheduleOwnerHref("demo", "professional", "p1"),
+      panelPath("demo", "schedule/profesional/p1"),
+    );
   });
 
   it("confirma el guardado con el nombre y pregunta la capacidad en claro", () => {

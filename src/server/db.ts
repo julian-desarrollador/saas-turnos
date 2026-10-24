@@ -20,7 +20,11 @@ function createClient() {
 function isCurrentClient(client: PrismaClient | undefined): client is PrismaClient {
   // En dev el cliente se cachea en globalThis. Tras `prisma generate`, HMR reusa
   // la instancia vieja y los modelos nuevos quedan undefined.
-  return typeof client?.membershipInvite?.findMany === "function";
+  return (
+    typeof client?.notification?.findMany === "function" &&
+    typeof client?.tenantSite?.findUnique === "function" &&
+    typeof client?.tenantSitePhoto?.findMany === "function"
+  );
 }
 
 export const db = isCurrentClient(globalForPrisma.prisma) ? globalForPrisma.prisma : createClient();

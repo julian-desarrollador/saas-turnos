@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { clientsValidationMessage } from "@/modules/clients/adapters/inbound/messages";
+import {
+  clientsValidationMessage,
+  phoneOwnerMismatchMessage,
+} from "@/modules/clients/adapters/inbound/messages";
 import { createMemoryClientRepository } from "@/modules/clients/adapters/outbound/memory-client-repository";
 import { ClientsError } from "@/modules/clients/application/errors";
 import type { ClientFicha } from "@/modules/clients/application/ports/client-repository";
@@ -144,16 +147,76 @@ describe("findOrCreateClient", () => {
     assert.equal(created.email, null);
   });
 
-  it("devuelve la ficha existente y no pisa el nombre", async () => {
+  it("rechaza un nombre distinto y no cambia la ficha", async () => {
+    const repo = createMemoryClientRepository([lucia]);
+    const findOrCreateClient = createFindOrCreateClient(repo);
+    await assert.rejects(
+      () =>
+        findOrCreateClient({
+          actor: ownerA,
+          phone: "+54 9 11 1234-5678",
+          firstName: "Otro",
+        }),
+      (error: unknown) =>
+        error instanceof ClientsError &&
+        error.reason === "PHONE_OWNER_MISMATCH" &&
+        error.ownerName === "Lucía Pérez",
+    );
+    const stored = await repo.findById(tenantA, luciaId);
+    assert.equal(stored?.firstName, "Lucía");
+    assert.equal(stored?.lastName, "Pérez");
+  });
+
+  it("acepta el mismo nombre sin importar mayúsculas ni espacios", async () => {
     const repo = createMemoryClientRepository([lucia]);
     const findOrCreateClient = createFindOrCreateClient(repo);
     const found = await findOrCreateClient({
       actor: ownerA,
-      phone: "+54 9 11 1234-5678",
-      firstName: "Otro",
+      phone: "11 1234 5678",
+      firstName: "  lucía  ",
     });
     assert.equal(found.id, luciaId);
     assert.equal(found.firstName, "Lucía");
+    assert.equal(found.lastName, "Pérez");
+  });
+
+  it("acepta el nombre y apellido juntos", async () => {
+    const repo = createMemoryClientRepository([lucia]);
+    const findOrCreateClient = createFindOrCreateClient(repo);
+    const found = await findOrCreateClient({
+      actor: ownerA,
+      phone: "1112345678",
+      firstName: "lucía pérez",
+    });
+    assert.equal(found.id, luciaId);
+    assert.equal(found.firstName, "Lucía");
+    assert.equal(found.lastName, "Pérez");
+  });
+
+  it("reutiliza la ficha si el nombre viene vacío", async () => {
+    const repo = createMemoryClientRepository([lucia]);
+    const findOrCreateClient = createFindOrCreateClient(repo);
+    const found = await findOrCreateClient({
+      actor: ownerA,
+      phone: "1112345678",
+      firstName: null,
+    });
+    assert.equal(found.id, luciaId);
+    assert.equal(found.firstName, "Lucía");
+  });
+
+  it("asocia el turno a la ficha existente si el operador lo confirma", async () => {
+    const repo = createMemoryClientRepository([lucia]);
+    const findOrCreateClient = createFindOrCreateClient(repo);
+    const found = await findOrCreateClient({
+      actor: ownerA,
+      phone: "1112345678",
+      firstName: "Otro",
+      acceptExisting: true,
+    });
+    assert.equal(found.id, luciaId);
+    assert.equal(found.firstName, "Lucía");
+    assert.equal(found.lastName, "Pérez");
   });
 
   it("completa el nombre si la ficha no tenía", async () => {
@@ -490,5 +553,12 @@ describe("updateClientFicha", () => {
 describe("clientsValidationMessage", () => {
   it("explica el WhatsApp de otra ficha", () => {
     assert.equal(clientsValidationMessage("PHONE_TAKEN"), "Ese WhatsApp ya es de otro cliente.");
+  });
+
+  it("nombra al dueño del número", () => {
+    assert.equal(
+      phoneOwnerMismatchMessage("Lucía Pérez"),
+      "Este número le pertenece a: Lucía Pérez.",
+    );
   });
 });

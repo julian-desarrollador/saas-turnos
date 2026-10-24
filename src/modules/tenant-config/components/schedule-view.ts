@@ -1,3 +1,4 @@
+import { panelPath } from "@/core/panel-routes";
 export const WEEKDAYS = [
   { day: 1, label: "Lunes", short: "Lun" },
   { day: 2, label: "Martes", short: "Mar" },
@@ -142,9 +143,9 @@ export function scheduleOwnerHref(
   id: string,
 ): string {
   if (kind === "branch") {
-    return `/${slug}/schedule/sucursal/${id}`;
+    return `${panelPath(slug, `schedule/sucursal/${id}`)}`;
   }
-  return `/${slug}/schedule/profesional/${id}`;
+  return `${panelPath(slug, `schedule/profesional/${id}`)}`;
 }
 
 export function scheduleToastMessage(who: string): string | null {

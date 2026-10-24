@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -26,7 +27,7 @@ export function AgendaFilters({
     <form
       key={`${date}-${professionalId}-${serviceId}`}
       method="get"
-      action={`/${slug}/agenda/nuevo`}
+      action={`${panelPath(slug, "agenda/nuevo")}`}
       className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4 xl:items-end"
     >
       <div className="grid gap-1.5">

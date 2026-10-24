@@ -1,4 +1,5 @@
 import { assertPermission } from "@/core/authorization";
+import { panelPath } from "@/core/panel-routes";
 
 import { normalizeEmail } from "../email";
 import { MembershipError } from "../errors";
@@ -35,6 +36,11 @@ export function createInviteMember(
       throw new MembershipError("NOT_FOUND");
     }
 
+    const activeMembers = await repo.listMembers(tenant.id);
+    if (activeMembers.length >= (tenant.employeeLimit ?? 3)) {
+      throw new MembershipError("CONFLICT", "EMPLOYEE_LIMIT", "email");
+    }
+
     const existingMember = await repo.findMemberByEmail(tenant.id, email);
     if (existingMember?.isActive) {
       throw new MembershipError("CONFLICT", "ALREADY_MEMBER", "email");
@@ -62,7 +68,7 @@ export function createInviteMember(
         });
       }
 
-      const redirectUrl = `${appBaseUrl.replace(/\/$/, "")}/${tenant.slug}/agenda`;
+      const redirectUrl = `${appBaseUrl.replace(/\/$/, "")}${panelPath(tenant.slug, "agenda")}`;
       invitation = await clerk.createInvitation({
         organizationId,
         email,

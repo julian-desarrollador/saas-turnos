@@ -1,5 +1,6 @@
 import type { Route } from "next";
 import Link from "next/link";
+import { panelPath } from "@/core/panel-routes";
 
 import { loadScheduleOwnerPage } from "@/modules/tenant-config";
 import { WeeklyScheduleScreen } from "@/modules/tenant-config/components/weekly-schedule-screen";
@@ -14,7 +15,7 @@ export async function ScheduleOwnerPage({
   id: string;
 }) {
   const page = await loadScheduleOwnerPage(slug, kind, id);
-  const listHref = `/${slug}/schedule` as Route;
+  const listHref = `${panelPath(slug, "schedule")}` as Route;
 
   if (!page.owner) {
     return (

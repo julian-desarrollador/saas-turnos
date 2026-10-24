@@ -21,6 +21,17 @@ const validationMessages: Record<TenantConfigValidationReason, string> = {
   BLOCK_TIME_INCOMPLETE: "Si indicás un horario, tenés que completar inicio y fin.",
   BLOCKS_OVERLAP: "Ya hay un bloqueo que se solapa con esas fechas o ese horario.",
   REASON_TOO_LONG: "El motivo no puede superar 255 caracteres.",
+  HEADLINE_TOO_LONG: "La frase no puede superar 120 caracteres.",
+  ABOUT_TOO_LONG: "El texto no puede superar 1.000 caracteres.",
+  BRAND_COLOR_INVALID: "Elegí un color de la lista.",
+  INSTAGRAM_INVALID:
+    "El usuario de Instagram solo puede tener letras, números, puntos y guiones bajos.",
+  IMAGE_KIND_INVALID: "Elegí si la foto es el logo, la portada o la galería.",
+  IMAGE_TYPE_INVALID: "La foto tiene que ser JPG, PNG o WebP.",
+  IMAGE_TOO_LARGE: "La foto no puede pesar más de 5 MB.",
+  IMAGE_KEY_INVALID: "La foto no pertenece a este negocio.",
+  IMAGE_NOT_UPLOADED: "La foto no terminó de subirse. Probá de nuevo.",
+  GALLERY_FULL: "La galería ya tiene 8 fotos. Borrá una para subir otra.",
 };
 
 export function validationMessage(reason: TenantConfigValidationReason | undefined): string {

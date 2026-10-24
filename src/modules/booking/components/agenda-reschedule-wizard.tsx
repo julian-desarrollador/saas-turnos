@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useActionState, useEffect, useMemo, useRef, useState, useTransition } from "react";
@@ -74,7 +75,8 @@ export function AgendaRescheduleWizard({
     undefined as ActionState | undefined,
   );
 
-  const closeHref = `/${slug}/agenda?date=${encodeURIComponent(appointment.localDate)}` as Route;
+  const closeHref =
+    `${panelPath(slug, `agenda?date=${encodeURIComponent(appointment.localDate)}`)}` as Route;
   const professional =
     availableProfessionals?.find((item) => item.id === professionalId) ??
     professionals.find((item) => item.id === professionalId) ??

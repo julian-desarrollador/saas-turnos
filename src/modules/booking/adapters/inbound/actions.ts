@@ -1,9 +1,12 @@
 "use server";
 
+import { panelPath } from "@/core/panel-routes";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
-import { ForbiddenError, hasPermission } from "@/core/authorization";
+import { assertPermission, ForbiddenError, hasPermission } from "@/core/authorization";
+import { fullAccessDenied, todayAccessDenied } from "@/modules/billing/domain/subscription";
 import { createPrismaAvailabilityRepository } from "@/modules/booking/adapters/outbound/prisma-availability-repository";
 import { BookingError } from "@/modules/booking/application/errors";
 import { emptySlotsReason } from "@/modules/booking/application/offered-from-snapshot";
@@ -33,22 +36,28 @@ import {
   addLocalDays,
   isLocalDate,
   isLocalTime,
+  localDateTimeToUtc,
   zonedCivilNow,
 } from "@/modules/booking/domain/time";
 import {
   ClientsError,
   clientsValidationMessage,
+  phoneOwnerMismatchMessage,
   createFindOrCreateClient,
   createPrismaClientRepository,
 } from "@/modules/clients";
+import { conflictingOwnerName } from "@/modules/clients/application/use-cases/find-or-create-client";
+import { normalizePhone } from "@/modules/clients/domain/phone";
 import { resolveTenantContext } from "@/server/auth";
 import { db, tenantDb } from "@/server/db";
+import { cancelBookingNotice, scheduleBookingNotice } from "@/server/notices";
 
 import { validationMessage } from "./messages";
 
 export type ActionState = {
   ok: boolean;
   message?: string;
+  phoneOwner?: string;
 };
 
 const repo = createPrismaAvailabilityRepository(db, tenantDb);
@@ -63,7 +72,47 @@ const getAppointment = createGetAppointment(repo);
 const cancelAppointment = createCancelAppointment(repo);
 const markNoShow = createMarkNoShow(repo);
 const markCompleted = createMarkCompleted(repo);
-const findOrCreateClient = createFindOrCreateClient(createPrismaClientRepository(db, tenantDb));
+const clientRepo = createPrismaClientRepository(db, tenantDb);
+const findOrCreateClient = createFindOrCreateClient(clientRepo);
+
+export type PhoneOwnerPreview = {
+  phoneOwner: string | null;
+  message?: string;
+};
+
+export async function previewClientPhoneAction(
+  slug: string,
+  phone: string,
+  firstName: string,
+): Promise<PhoneOwnerPreview> {
+  try {
+    const ctx = await resolveTenantContext(slug);
+    const denied = fullAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { phoneOwner: null, message: denied };
+    }
+    const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
+    assertPermission(actor.role, "clients.write");
+    const normalized = normalizePhone(phone);
+    if (!normalized) {
+      return { phoneOwner: null };
+    }
+    const existing = await clientRepo.findByPhone(actor.tenantId, normalized);
+    const owner = conflictingOwnerName(existing, firstName);
+    if (!owner) {
+      return { phoneOwner: null };
+    }
+    return { phoneOwner: owner, message: phoneOwnerMismatchMessage(owner) };
+  } catch (error) {
+    if (error instanceof ForbiddenError) {
+      return { phoneOwner: null, message: "No tenés permiso para esta acción." };
+    }
+    if (error instanceof ClientsError) {
+      return { phoneOwner: null, message: clientsValidationMessage(error.reason) };
+    }
+    throw error;
+  }
+}
 
 function readQueryValue(value: string | string[] | undefined): string {
   if (typeof value === "string") {
@@ -167,7 +216,7 @@ function agendaHomeHref(
       params.set("blockWho", query.blockWho);
     }
   }
-  return `/${slug}/agenda?${params.toString()}`;
+  return `${panelPath(slug, `agenda?${params.toString()}`)}`;
 }
 
 export type AgendaMonthPayload = {
@@ -428,13 +477,18 @@ export async function createAppointmentAction(
 
   try {
     const ctx = await resolveTenantContext(slug);
+    const denied = fullAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
     const client = await findOrCreateClient({
       actor,
       phone: readString(formData, "phone"),
       firstName: readOptionalString(formData, "firstName"),
+      acceptExisting: formData.get("acceptExisting") === "1",
     });
-    await createAppointment({
+    const created = await createAppointment({
       actor,
       professionalId,
       serviceId,
@@ -443,14 +497,33 @@ export async function createAppointmentAction(
       localTime,
       now: new Date(),
     });
-    revalidatePath(`/${slug}/agenda`);
-    revalidatePath(`/${slug}/agenda/nuevo`);
+    const detail = await getAppointment({ actor, appointmentId: created.id });
+    await scheduleBookingNotice({
+      tenantId: ctx.tenant.id,
+      appointmentId: created.id,
+      startsAt: localDateTimeToUtc(created.localDate, created.localTime, ctx.tenant.timezone),
+      localDate: created.localDate,
+      localTime: created.localTime,
+      phone: detail?.clientPhone ?? client.phone,
+      businessName: ctx.tenant.name,
+      serviceName: detail?.serviceName ?? "Turno",
+      now: new Date(),
+    });
+    revalidatePath(`${panelPath(slug, "agenda")}`);
+    revalidatePath(`${panelPath(slug, "agenda/nuevo")}`);
     redirect(agendaHomeHref(slug, { date, booked: true }) as never);
   } catch (error) {
     if (error instanceof ForbiddenError) {
       return { ok: false, message: "No tenés permiso para esta acción." };
     }
     if (error instanceof ClientsError) {
+      if (error.reason === "PHONE_OWNER_MISMATCH" && error.ownerName) {
+        return {
+          ok: false,
+          message: phoneOwnerMismatchMessage(error.ownerName),
+          phoneOwner: error.ownerName,
+        };
+      }
       return { ok: false, message: clientsValidationMessage(error.reason) };
     }
     if (error instanceof BookingError && error.code === "NOT_FOUND") {
@@ -472,13 +545,19 @@ export async function cancelAppointmentAction(
 
   try {
     const ctx = await resolveTenantContext(slug);
+    const denied = todayAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
+    const appointmentId = readString(formData, "appointmentId");
     await cancelAppointment({
       actor,
-      appointmentId: readString(formData, "appointmentId"),
+      appointmentId,
     });
-    revalidatePath(`/${slug}/agenda`);
-    revalidatePath(`/${slug}/agenda/nuevo`);
+    await cancelBookingNotice(ctx.tenant.id, appointmentId);
+    revalidatePath(`${panelPath(slug, "agenda")}`);
+    revalidatePath(`${panelPath(slug, "agenda/nuevo")}`);
     redirect(agendaHomeHref(slug, { date, cancelled: true }) as never);
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -503,13 +582,17 @@ export async function markNoShowAction(
 
   try {
     const ctx = await resolveTenantContext(slug);
+    const denied = todayAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
     await markNoShow({
       actor,
       appointmentId: readString(formData, "appointmentId"),
     });
-    revalidatePath(`/${slug}/agenda`);
-    revalidatePath(`/${slug}/agenda/nuevo`);
+    revalidatePath(`${panelPath(slug, "agenda")}`);
+    revalidatePath(`${panelPath(slug, "agenda/nuevo")}`);
     redirect(agendaHomeHref(slug, { date, noShow: true }) as never);
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -534,13 +617,17 @@ export async function markCompletedAction(
 
   try {
     const ctx = await resolveTenantContext(slug);
+    const denied = todayAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
     await markCompleted({
       actor,
       appointmentId: readString(formData, "appointmentId"),
     });
-    revalidatePath(`/${slug}/agenda`);
-    revalidatePath(`/${slug}/agenda/nuevo`);
+    revalidatePath(`${panelPath(slug, "agenda")}`);
+    revalidatePath(`${panelPath(slug, "agenda/nuevo")}`);
     redirect(agendaHomeHref(slug, { date, completed: true }) as never);
   } catch (error) {
     if (error instanceof ForbiddenError) {
@@ -706,6 +793,10 @@ export async function rescheduleAppointmentAction(
   let moved;
   try {
     const ctx = await resolveTenantContext(slug);
+    const denied = fullAccessDenied(ctx.tenant.access);
+    if (denied) {
+      return { ok: false, message: denied };
+    }
     const actor = { tenantId: ctx.tenant.id, role: ctx.membership.role };
     moved = await rescheduleAppointment({
       actor,
@@ -713,6 +804,18 @@ export async function rescheduleAppointmentAction(
       professionalId: readString(formData, "professionalId"),
       localDate: readString(formData, "date"),
       localTime: readString(formData, "time"),
+      now: new Date(),
+    });
+    const detail = await getAppointment({ actor, appointmentId: moved.id });
+    await scheduleBookingNotice({
+      tenantId: ctx.tenant.id,
+      appointmentId: moved.id,
+      startsAt: localDateTimeToUtc(moved.localDate, moved.localTime, ctx.tenant.timezone),
+      localDate: moved.localDate,
+      localTime: moved.localTime,
+      phone: detail?.clientPhone ?? "",
+      businessName: ctx.tenant.name,
+      serviceName: detail?.serviceName ?? "Turno",
       now: new Date(),
     });
   } catch (error) {
@@ -728,9 +831,9 @@ export async function rescheduleAppointmentAction(
     throw error;
   }
 
-  revalidatePath(`/${slug}/agenda`);
-  revalidatePath(`/${slug}/agenda/nuevo`);
-  revalidatePath(`/${slug}/agenda/${appointmentId}/reprogramar`);
+  revalidatePath(`${panelPath(slug, "agenda")}`);
+  revalidatePath(`${panelPath(slug, "agenda/nuevo")}`);
+  revalidatePath(`${panelPath(slug, `agenda/${appointmentId}/reprogramar`)}`);
   redirect(agendaHomeHref(slug, { date: moved.localDate, rescheduled: true }) as never);
 }
 

@@ -29,7 +29,14 @@ const eslintConfig = defineConfig([
     },
   },
   {
-    files: ["src/lib/env/*.ts", "*.config.ts", "*.config.mjs", "prisma/seed.ts"],
+    files: [
+      "src/lib/env/*.ts",
+      "*.config.ts",
+      "*.config.mjs",
+      "prisma/seed.ts",
+      "scripts/**/*.ts",
+      "trigger/**/*.ts",
+    ],
     rules: { "no-restricted-properties": "off" },
   },
   {

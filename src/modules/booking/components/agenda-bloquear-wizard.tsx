@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import { CalendarDays, Check } from "lucide-react";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
@@ -181,7 +182,7 @@ export function AgendaBloquearWizard({
   const [confirmPending, setConfirmPending] = useState(false);
   const [confirmState, setConfirmState] = useState<ActionState | undefined>();
 
-  const closeHref = `/${slug}/agenda` as Route;
+  const closeHref = `${panelPath(slug, "agenda")}` as Route;
 
   const selectedOwners = useMemo(() => {
     if (branchOwner) {
@@ -342,7 +343,7 @@ export function AgendaBloquearWizard({
     if (ownerLabel) {
       params.set("blockWho", ownerLabel);
     }
-    router.push(`/${slug}/agenda?${params.toString()}` as Route);
+    router.push(`${panelPath(slug, `agenda?${params.toString()}`)}` as Route);
   }
 
   function handleContinue() {

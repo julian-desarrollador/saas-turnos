@@ -25,6 +25,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "test": "node --import tsx --test \"src/**/*.test.ts\"",
     "test:db": "node --import tsx --test src/server/tenant-db.db-test.ts",
+    "billing:proof": "node --import tsx scripts/mercadopago-proof.ts",
+    "billing:credit": "node --import tsx scripts/credit-payment.ts",
     "prepare": "husky"
   },
   "lint-staged": {
@@ -42,6 +44,8 @@
     "@clerk/nextjs": "^7.8.0",
     "@prisma/adapter-pg": "^7.9.1",
     "@prisma/client": "^7.9.1",
+    "@trigger.dev/sdk": "^4.6.4",
+    "aws4fetch": "^1.0.20",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.27.0",

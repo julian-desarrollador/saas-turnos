@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 
-import { isTenantSlug } from "@/core/tenant-slug";
+import { isReservedTenantSlug, isTenantSlug } from "@/core/tenant-slug";
 
 describe("isTenantSlug", () => {
   it("acepta slugs en minúsculas con guiones internos", () => {
@@ -18,5 +18,11 @@ describe("isTenantSlug", () => {
     assert.equal(isTenantSlug("-demo"), false);
     assert.equal(isTenantSlug("demo-"), false);
     assert.equal(isTenantSlug("foo--bar"), false);
+  });
+
+  it("reserva términos y privacidad para que no sean un negocio", () => {
+    assert.equal(isReservedTenantSlug("terminos"), true);
+    assert.equal(isReservedTenantSlug("privacidad"), true);
+    assert.equal(isReservedTenantSlug("demo"), false);
   });
 });

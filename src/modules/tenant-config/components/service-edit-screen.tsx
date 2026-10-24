@@ -1,5 +1,6 @@
 "use client";
 
+import { panelPath } from "@/core/panel-routes";
 import type { Route } from "next";
 import { useRouter } from "next/navigation";
 import { useActionState, useRef, useState } from "react";
@@ -26,7 +27,7 @@ export function ServiceEditScreen({ slug, service }: { slug: string; service: Se
   const [name, setName] = useState(service.name);
   const [confirmOpen, setConfirmOpen] = useState(false);
 
-  const listHref = `/${slug}/services` as Route;
+  const listHref = `${panelPath(slug, "services")}` as Route;
   const nextActive = !service.isActive;
 
   return (
