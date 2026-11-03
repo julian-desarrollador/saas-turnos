@@ -144,3 +144,175 @@
   opacity: 0;
   cursor: pointer;
 }
+
+/*
+ * Portada de la plataforma (src/app/page.tsx). Tokens del diseño de Stitch con prefijo `lp-`
+ * para no pisar los de shadcn (primary, secondary, background). docs/22-marketing.md §12.
+ */
+@theme {
+  --color-lp-background: #faf8ff;
+  --color-lp-surface: #faf8ff;
+  --color-lp-surface-bright: #faf8ff;
+  --color-lp-surface-dim: #d2d9f4;
+  --color-lp-surface-tint: #4d44e3;
+  --color-lp-surface-variant: #dae2fd;
+  --color-lp-surface-container-lowest: #ffffff;
+  --color-lp-surface-container-low: #f2f3ff;
+  --color-lp-surface-container: #eaedff;
+  --color-lp-surface-container-high: #e2e7ff;
+  --color-lp-surface-container-highest: #dae2fd;
+  --color-lp-on-background: #131b2e;
+  --color-lp-on-surface: #131b2e;
+  --color-lp-on-surface-variant: #464555;
+  --color-lp-inverse-surface: #283044;
+  --color-lp-inverse-on-surface: #eef0ff;
+  --color-lp-inverse-primary: #c3c0ff;
+  --color-lp-outline: #777587;
+  --color-lp-outline-variant: #c7c4d8;
+  --color-lp-primary: #3525cd;
+  --color-lp-on-primary: #ffffff;
+  --color-lp-primary-container: #4f46e5;
+  --color-lp-on-primary-container: #dad7ff;
+  --color-lp-primary-fixed: #e2dfff;
+  --color-lp-primary-fixed-dim: #c3c0ff;
+  --color-lp-on-primary-fixed: #0f0069;
+  --color-lp-on-primary-fixed-variant: #3323cc;
+  --color-lp-secondary: #006c49;
+  --color-lp-on-secondary: #ffffff;
+  --color-lp-secondary-container: #6cf8bb;
+  --color-lp-on-secondary-container: #00714d;
+  --color-lp-secondary-fixed: #6ffbbe;
+  --color-lp-secondary-fixed-dim: #4edea3;
+  --color-lp-on-secondary-fixed: #002113;
+  --color-lp-on-secondary-fixed-variant: #005236;
+  --color-lp-tertiary: #571ac0;
+  --color-lp-on-tertiary: #ffffff;
+  --color-lp-tertiary-container: #6f3dd9;
+  --color-lp-on-tertiary-container: #e3d5ff;
+  --color-lp-tertiary-fixed: #e9ddff;
+  --color-lp-tertiary-fixed-dim: #d0bcff;
+  --color-lp-on-tertiary-fixed: #23005c;
+  --color-lp-on-tertiary-fixed-variant: #5516be;
+  --color-lp-error: #ba1a1a;
+  --color-lp-on-error: #ffffff;
+  --color-lp-error-container: #ffdad6;
+  --color-lp-on-error-container: #93000a;
+
+  --radius-lp: 0.25rem;
+  --radius-lp-sm: 0.125rem;
+  --radius-lp-md: 0.375rem;
+  --radius-lp-lg: 0.5rem;
+  --radius-lp-xl: 0.75rem;
+  --radius-lp-2xl: 1rem;
+
+  --spacing-lp-space-xs: 0.25rem;
+  --spacing-lp-space-sm: 0.5rem;
+  --spacing-lp-space-md: 1rem;
+  --spacing-lp-space-lg: 1.5rem;
+  --spacing-lp-space-xl: 2.5rem;
+  --spacing-lp-gutter-sm: 1rem;
+  --spacing-lp-gutter: 1.5rem;
+  --spacing-lp-margin-sm: 1rem;
+  --spacing-lp-margin: 2rem;
+
+  --text-lp-headline-xl: 48px;
+  --text-lp-headline-xl--line-height: 56px;
+  --text-lp-headline-xl--letter-spacing: -0.03em;
+  --text-lp-headline-xl--font-weight: 800;
+  --text-lp-headline-xl-mobile: 32px;
+  --text-lp-headline-xl-mobile--line-height: 40px;
+  --text-lp-headline-xl-mobile--letter-spacing: -0.025em;
+  --text-lp-headline-xl-mobile--font-weight: 800;
+  --text-lp-headline-lg: 36px;
+  --text-lp-headline-lg--line-height: 44px;
+  --text-lp-headline-lg--letter-spacing: -0.025em;
+  --text-lp-headline-lg--font-weight: 700;
+  --text-lp-headline-lg-mobile: 26px;
+  --text-lp-headline-lg-mobile--line-height: 34px;
+  --text-lp-headline-lg-mobile--letter-spacing: -0.02em;
+  --text-lp-headline-lg-mobile--font-weight: 700;
+  --text-lp-headline-md: 24px;
+  --text-lp-headline-md--line-height: 32px;
+  --text-lp-headline-md--letter-spacing: -0.02em;
+  --text-lp-headline-md--font-weight: 700;
+  --text-lp-headline-sm: 20px;
+  --text-lp-headline-sm--line-height: 28px;
+  --text-lp-headline-sm--letter-spacing: -0.015em;
+  --text-lp-headline-sm--font-weight: 600;
+  --text-lp-title-md: 18px;
+  --text-lp-title-md--line-height: 26px;
+  --text-lp-title-md--letter-spacing: -0.01em;
+  --text-lp-title-md--font-weight: 600;
+  --text-lp-title-sm: 16px;
+  --text-lp-title-sm--line-height: 24px;
+  --text-lp-title-sm--letter-spacing: -0.005em;
+  --text-lp-title-sm--font-weight: 600;
+  --text-lp-body-lg: 16px;
+  --text-lp-body-lg--line-height: 26px;
+  --text-lp-body-lg--font-weight: 400;
+  --text-lp-body-md: 14px;
+  --text-lp-body-md--line-height: 22px;
+  --text-lp-body-md--font-weight: 400;
+  --text-lp-body-sm: 13px;
+  --text-lp-body-sm--line-height: 18px;
+  --text-lp-body-sm--font-weight: 400;
+  --text-lp-label-lg: 14px;
+  --text-lp-label-lg--line-height: 20px;
+  --text-lp-label-lg--letter-spacing: 0.005em;
+  --text-lp-label-lg--font-weight: 600;
+  --text-lp-label-md: 12px;
+  --text-lp-label-md--line-height: 16px;
+  --text-lp-label-md--letter-spacing: 0.01em;
+  --text-lp-label-md--font-weight: 600;
+  --text-lp-label-sm: 11px;
+  --text-lp-label-sm--line-height: 14px;
+  --text-lp-label-sm--letter-spacing: 0.03em;
+  --text-lp-label-sm--font-weight: 700;
+}
+
+/*
+ * Diferencias con Tailwind v3, el del HTML de Stitch: cursor de mano en botones, interlineado fijo
+ * en text-xs/sm/lg (los textos text-[11px] lo heredan) y la paleta en hex en lugar de oklch.
+ */
+.lp-root {
+  --text-xs--line-height: 1rem;
+  --text-sm--line-height: 1.25rem;
+  --text-lg--line-height: 1.75rem;
+  --color-amber-50: #fffbeb;
+  --color-amber-100: #fef3c7;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-900: #78350f;
+  --color-emerald-50: #ecfdf5;
+  --color-emerald-100: #d1fae5;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-700: #047857;
+  --color-emerald-800: #065f46;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+  --color-rose-50: #fff1f2;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-600: #e11d48;
+  --color-rose-700: #be123c;
+  --color-blue-600: #2563eb;
+}
+
+.lp-root button {
+  cursor: pointer;
+}
+
+/* Como en Stitch: sin barra de scroll visible, solo en la portada. */
+html:has(.lp-root)::-webkit-scrollbar {
+  display: none;
+}
+
+/*
+ * El CSS de Google para Material Symbols no tiene capa y le gana a text-[18px] (@layer utilities).
+ * En Stitch ganaba la utilidad: se le devuelve el tamaño a los íconos que traen uno.
+ */
+.lp-root .material-symbols-outlined:where([class*="text-["]) {
+  font-size: revert-layer;
+}
